@@ -316,6 +316,7 @@ INSTALLED_APPS = [
     "allauth.socialaccount.providers.saml",
     "saml_auth.apps.SamlAuthConfig",
     "tinymce",
+    "external_media",
 ]
 
 MIDDLEWARE = [
@@ -429,6 +430,8 @@ DATABASES = {
 
 
 REDIS_LOCATION = "redis://127.0.0.1:6379/1"
+MEDIACMS_IDENTITY_TOKEN_HASH = os.getenv("MEDIACMS_IDENTITY_TOKEN_HASH", "")
+MEDIACMS_PUBLISHING_TOKEN_HASH = os.getenv("MEDIACMS_PUBLISHING_TOKEN_HASH", "")
 CACHES = {
     "default": {
         "BACKEND": "django_redis.cache.RedisCache",

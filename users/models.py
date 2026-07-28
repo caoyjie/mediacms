@@ -25,6 +25,7 @@ class User(AbstractUser):
         blank=True,
     )
     description = models.TextField("About me", blank=True)
+    session_version = models.PositiveIntegerField(default=1)
 
     name = models.CharField("full name", max_length=250, db_index=True)
     date_added = models.DateTimeField("date added", default=timezone.now, db_index=True)
@@ -110,6 +111,20 @@ class User(AbstractUser):
         return ret
 
     def save(self, *args, **kwargs):
+        update_fields = kwargs.get("update_fields")
+        if self.pk:
+            previous = type(self).objects.filter(pk=self.pk).values(
+                "password", "is_active", "session_version"
+            ).first()
+            if previous and (
+                previous["password"]
+                and not previous["password"].startswith("!")
+                and previous["password"] != self.password
+                or previous["is_active"] != self.is_active
+            ):
+                self.session_version = previous["session_version"] + 1
+                if update_fields is not None:
+                    kwargs["update_fields"] = set(update_fields) | {"session_version"}
         strip_text_items = ["name", "description", "title"]
         for item in strip_text_items:
             setattr(self, item, strip_tags(getattr(self, item, None)))

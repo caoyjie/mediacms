@@ -17,6 +17,7 @@ schema_view = get_schema_view(
 # refactor seriously
 
 urlpatterns = [
+    path("internal/api/", include("external_media.urls")),
     re_path(r"^__debug__/", include(debug_toolbar.urls)),
     path(
         "robots.txt",
