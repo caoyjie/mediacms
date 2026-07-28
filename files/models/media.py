@@ -76,6 +76,8 @@ class Media(models.Model):
 
     backend_media_id = models.CharField(max_length=255, blank=True, null=True, unique=True)
 
+    external_sync_version = models.PositiveIntegerField(default=1)
+
     external_cover_url = models.URLField(max_length=1000, blank=True, null=True, validators=[validate_external_media_url])
 
     external_hls_url = models.URLField(max_length=1000, blank=True, null=True, validators=[validate_external_media_url])
@@ -1044,7 +1046,8 @@ def media_save(sender, instance, created, **kwargs):
     if created:
         from ..methods import notify_users
 
-        instance.media_init()
+        if not (instance.external_hls_url or instance.external_poster_url or instance.external_cover_url):
+            instance.media_init()
         notify_users(friendly_token=instance.friendly_token, action="media_added")
 
     instance.user.update_user_media()
