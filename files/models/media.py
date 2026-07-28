@@ -31,6 +31,7 @@ from .utils import (
     MEDIA_TYPES_SUPPORTED,
     original_media_file_path,
     original_thumbnail_file_path,
+    validate_external_media_url,
 )
 from .video_data import VideoTrimRequest
 
@@ -72,6 +73,12 @@ class Media(models.Model):
     )
 
     friendly_token = models.CharField(blank=True, max_length=150, db_index=True, unique=True, help_text="Identifier for the Media")
+
+    backend_media_id = models.CharField(max_length=255, blank=True, null=True, unique=True)
+
+    external_cover_url = models.URLField(max_length=1000, blank=True, null=True, validators=[validate_external_media_url])
+
+    external_hls_url = models.URLField(max_length=1000, blank=True, null=True, validators=[validate_external_media_url])
 
     hls_file = models.CharField(max_length=1000, blank=True, help_text="Path to HLS file for videos")
 
@@ -123,6 +130,8 @@ class Media(models.Model):
         max_length=500,
         help_text="media extracted big thumbnail, shown on media page",
     )
+
+    external_poster_url = models.URLField(max_length=1000, blank=True, null=True, validators=[validate_external_media_url])
 
     rating_category = models.ManyToManyField(
         "RatingCategory",
@@ -755,6 +764,8 @@ class Media(models.Model):
         that is auto-generated
         """
 
+        if self.external_cover_url:
+            return self.external_cover_url
         if self.uploaded_thumbnail:
             return helpers.url_from_path(self.uploaded_thumbnail.path)
         if self.thumbnail:
@@ -770,6 +781,8 @@ class Media(models.Model):
         that is auto-generated
         """
 
+        if self.external_poster_url:
+            return self.external_poster_url
         if self.uploaded_poster:
             return helpers.url_from_path(self.uploaded_poster.path)
         if self.poster:
@@ -821,7 +834,7 @@ class Media(models.Model):
         for subtitle in sorted_subtitles:
             ret.append(
                 {
-                    "src": helpers.url_from_path(subtitle.subtitle_file.path),
+                    "src": subtitle.external_url or helpers.url_from_path(subtitle.subtitle_file.path),
                     "srclang": subtitle.language.code,
                     "label": subtitle.language.title,
                 }
@@ -861,6 +874,8 @@ class Media(models.Model):
         """
 
         res = {}
+        if self.external_hls_url:
+            return {"master_file": self.external_hls_url}
         valid_resolutions = [144, 240, 360, 480, 720, 1080, 1440, 2160]
         if self.hls_file:
             if os.path.exists(self.hls_file):

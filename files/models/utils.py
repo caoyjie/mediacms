@@ -1,8 +1,20 @@
+from urllib.parse import urlsplit
+
 from django.conf import settings
 from django.core.exceptions import ValidationError
+from django.core.validators import URLValidator
 from django.utils.crypto import get_random_string
 
 from .. import helpers
+
+
+def validate_external_media_url(value):
+    """Only accept HTTPS assets served by the Media Platform domain."""
+
+    URLValidator(schemes=["https"])(value)
+    if urlsplit(value).hostname != "media.ygcyj.xin":
+        raise ValidationError("External media URLs must use media.ygcyj.xin.")
+
 
 # this is used by Media and Encoding models
 # reflects media encoding status for objects

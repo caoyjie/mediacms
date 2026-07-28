@@ -9,7 +9,7 @@ from django.dispatch import receiver
 from django.urls import reverse
 
 from .. import helpers
-from .utils import MEDIA_ENCODING_STATUS, subtitles_file_path
+from .utils import MEDIA_ENCODING_STATUS, subtitles_file_path, validate_external_media_url
 
 
 class Language(models.Model):
@@ -41,6 +41,8 @@ class Subtitle(models.Model):
         upload_to=subtitles_file_path,
         max_length=500,
     )
+
+    external_url = models.URLField(max_length=1000, blank=True, null=True, validators=[validate_external_media_url])
 
     user = models.ForeignKey("users.User", on_delete=models.CASCADE)
 
