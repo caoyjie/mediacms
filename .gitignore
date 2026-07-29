@@ -39,3 +39,6 @@ static/video_editor/videos/sample-video.mp3
 templates/todo-MS4.md
 .secret_key
 .secret_key.lock
+.venv/
+__pycache__/
+*.py[cod]

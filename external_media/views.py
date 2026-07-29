@@ -1,4 +1,4 @@
-from django.contrib.auth import authenticate, login
+from django.contrib.auth import authenticate
 from django.db import transaction
 from rest_framework import status
 from rest_framework.parsers import JSONParser
@@ -8,7 +8,7 @@ from rest_framework.views import APIView
 from files.models import Media
 from users.models import User
 
-from .authentication import SessionUserAuthentication, has_identity_scope, has_publishing_scope
+from .authentication import has_identity_scope, has_publishing_scope
 from .permissions import forbidden, unauthorized
 from .serializers import ExternalMediaSerializer
 
@@ -28,28 +28,45 @@ class PrivateLoginView(APIView):
     parser_classes = [JSONParser]
 
     def post(self, request):
+        if not has_identity_scope(request):
+            return unauthorized()
+
         identifier = request.data.get("username") or request.data.get("email")
         password = request.data.get("password")
         user = authenticate(request, username=identifier, password=password)
         if user is None or not user.is_active:
             return Response({"detail": "invalid credentials"}, status=status.HTTP_401_UNAUTHORIZED)
 
-        login(request, user)
         return Response(identity_payload(user))
 
 
-class SessionUserView(APIView):
-    authentication_classes = [SessionUserAuthentication]
+class IdentityValidationView(APIView):
+    authentication_classes = []
     permission_classes = []
+    parser_classes = [JSONParser]
 
-    def get(self, request):
+    def post(self, request):
         if not has_identity_scope(request):
             return unauthorized()
-        if not request.user.is_authenticated:
+
+        user_id = request.data.get("id")
+        session_version = request.data.get("session_version")
+        valid_version = isinstance(session_version, int) and not isinstance(
+            session_version, bool
+        )
+        if not user_id or not valid_version:
             return unauthorized()
-        if not request.user.is_active:
+
+        try:
+            user = User.objects.get(pk=user_id)
+        except (TypeError, ValueError, User.DoesNotExist):
+            return unauthorized()
+
+        if not user.is_active:
             return forbidden()
-        return Response(identity_payload(request.user))
+        if user.session_version != session_version:
+            return unauthorized()
+        return Response(identity_payload(user))
 
 
 class ExternalMediaView(APIView):

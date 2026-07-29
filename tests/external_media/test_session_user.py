@@ -17,11 +17,12 @@ class SessionUserApiTest(TestCase):
         self.password = "password-for-test"
         self.user = create_account(username="alice", password=self.password)
 
-    def test_private_login_creates_session_and_returns_identity(self) -> None:
+    def test_private_login_returns_identity_without_session(self) -> None:
         response = self.client.post(
             "/internal/api/auth/login/",
             json.dumps({"username": "alice", "password": self.password}),
             content_type="application/json",
+            HTTP_AUTHORIZATION="Bearer identity-secret",
         )
 
         self.assertEqual(response.status_code, 200)
@@ -34,34 +35,68 @@ class SessionUserApiTest(TestCase):
                 "session_version": 1,
             },
         )
-        self.assertIn("sessionid", self.client.cookies)
+        self.assertNotIn("sessionid", self.client.cookies)
 
-    def test_session_user_requires_identity_token(self) -> None:
-        self.client.force_login(self.user)
-
-        response = self.client.get("/internal/api/session-user/")
+    def test_private_login_requires_identity_token(self) -> None:
+        response = self.client.post(
+            "/internal/api/auth/login/",
+            json.dumps({"username": "alice", "password": self.password}),
+            content_type="application/json",
+        )
 
         self.assertEqual(response.status_code, 401)
 
-    def test_session_user_returns_current_identity(self) -> None:
-        self.client.force_login(self.user)
-
-        response = self.client.get(
-            "/internal/api/session-user/",
+    def test_identity_validation_returns_current_identity(self) -> None:
+        response = self.client.post(
+            "/internal/api/identity/validate/",
+            json.dumps({"id": str(self.user.id), "session_version": 1}),
+            content_type="application/json",
             HTTP_AUTHORIZATION="Bearer identity-secret",
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["username"], "alice")
-        self.assertEqual(response.json()["session_version"], 1)
+        self.assertEqual(
+            response.json(),
+            {
+                "id": str(self.user.id),
+                "username": "alice",
+                "is_active": True,
+                "session_version": 1,
+            },
+        )
+
+    def test_identity_validation_requires_identity_token(self) -> None:
+        response = self.client.post(
+            "/internal/api/identity/validate/",
+            json.dumps({"id": str(self.user.id), "session_version": 1}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 401)
+
+    def test_version_mismatch_is_rejected(self) -> None:
+        response = self.client.post(
+            "/internal/api/identity/validate/",
+            json.dumps({"id": str(self.user.id), "session_version": 2}),
+            content_type="application/json",
+            HTTP_AUTHORIZATION="Bearer identity-secret",
+        )
+
+        self.assertEqual(response.status_code, 401)
 
     def test_inactive_user_is_rejected(self) -> None:
-        self.client.force_login(self.user)
         self.user.is_active = False
         self.user.save(update_fields=["is_active"])
 
-        response = self.client.get(
-            "/internal/api/session-user/",
+        response = self.client.post(
+            "/internal/api/identity/validate/",
+            json.dumps(
+                {
+                    "id": str(self.user.id),
+                    "session_version": self.user.session_version,
+                }
+            ),
+            content_type="application/json",
             HTTP_AUTHORIZATION="Bearer identity-secret",
         )
 
