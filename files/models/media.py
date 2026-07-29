@@ -369,7 +369,7 @@ class Media(models.Model):
 
         items = [self.friendly_token, self.title, self.user.username, self.user.email, self.user.name, self.description, a_tags]
 
-        for subtitle in self.subtitles.all():
+        for subtitle in self.subtitles.exclude(subtitle_file=""):
             items.append(subtitle.subtitle_text)
 
         items = [item for item in items if item]

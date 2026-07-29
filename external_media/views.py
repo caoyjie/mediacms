@@ -10,7 +10,10 @@ from users.models import User
 
 from .authentication import has_identity_scope, has_publishing_scope
 from .permissions import forbidden, unauthorized
-from .serializers import ExternalMediaSerializer
+from .serializers import (
+    ExternalMediaSerializer,
+    reconcile_external_subtitles,
+)
 
 
 def identity_payload(user: User) -> dict[str, object]:
@@ -88,6 +91,16 @@ class ExternalMediaView(APIView):
         with transaction.atomic():
             existing = Media.objects.select_for_update().filter(backend_media_id=backend_media_id).first()
             if existing:
+                serializer = ExternalMediaSerializer(
+                    existing,
+                    data=request.data,
+                )
+                serializer.is_valid(raise_exception=True)
+                if "subtitles" in serializer.validated_data:
+                    reconcile_external_subtitles(
+                        existing,
+                        serializer.validated_data["subtitles"],
+                    )
                 return Response(ExternalMediaSerializer(existing).data, status=status.HTTP_200_OK)
             serializer = ExternalMediaSerializer(data=request.data)
             serializer.is_valid(raise_exception=True)
