@@ -159,6 +159,7 @@ ALLOWED_DOMAINS_FOR_USER_REGISTRATION = []
 # django rest settings
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
+        "external_media.authentication.BffUserAuthentication",
         "rest_framework.authentication.SessionAuthentication",
         "rest_framework.authentication.BasicAuthentication",
         "rest_framework.authentication.TokenAuthentication",
@@ -432,6 +433,10 @@ DATABASES = {
 REDIS_LOCATION = "redis://127.0.0.1:6379/1"
 MEDIACMS_IDENTITY_TOKEN_HASH = os.getenv("MEDIACMS_IDENTITY_TOKEN_HASH", "")
 MEDIACMS_PUBLISHING_TOKEN_HASH = os.getenv("MEDIACMS_PUBLISHING_TOKEN_HASH", "")
+MEDIACMS_BFF_TOKEN_HASH = os.getenv("MEDIACMS_BFF_TOKEN_HASH", "")
+MEDIACMS_BFF_PREVIOUS_TOKEN_HASH = os.getenv(
+    "MEDIACMS_BFF_PREVIOUS_TOKEN_HASH", ""
+)
 CACHES = {
     "default": {
         "BACKEND": "django_redis.cache.RedisCache",
