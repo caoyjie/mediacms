@@ -1,15 +1,26 @@
 from django.contrib.auth import authenticate
 from django.db import transaction
+from django.db.models import F
 from rest_framework import status
-from rest_framework.parsers import JSONParser
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from files.models import Media
 from users.models import User
 
-from .authentication import has_identity_scope, has_publishing_scope
+from .authentication import (
+    BffUserAuthentication,
+    has_identity_scope,
+    has_publishing_scope,
+)
 from .permissions import forbidden, unauthorized
+from .profile_serializers import (
+    CurrentProfileSerializer,
+    PasswordChangeSerializer,
+    ProfileLogoSerializer,
+)
 from .serializers import (
     ExternalMediaSerializer,
     reconcile_external_subtitles,
@@ -23,6 +34,70 @@ def identity_payload(user: User) -> dict[str, object]:
         "is_active": bool(user.is_active),
         "session_version": user.session_version,
     }
+
+
+def current_profile(user: User, request):
+    return CurrentProfileSerializer(
+        user,
+        context={"request": request},
+    ).data
+
+
+class CurrentProfileView(APIView):
+    authentication_classes = [BffUserAuthentication]
+    permission_classes = [IsAuthenticated]
+    parser_classes = [JSONParser]
+
+    def get(self, request):
+        return Response(current_profile(request.user, request))
+
+    def patch(self, request):
+        serializer = CurrentProfileSerializer(
+            request.user,
+            data=request.data,
+            partial=True,
+            context={"request": request},
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(current_profile(request.user, request))
+
+
+class ProfileLogoView(APIView):
+    authentication_classes = [BffUserAuthentication]
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def post(self, request):
+        serializer = ProfileLogoSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        request.user.logo = serializer.validated_data["logo"]
+        request.user.save(update_fields=["logo"])
+        return Response(current_profile(request.user, request))
+
+
+class ProfilePasswordView(APIView):
+    authentication_classes = [BffUserAuthentication]
+    permission_classes = [IsAuthenticated]
+    parser_classes = [JSONParser]
+
+    def post(self, request):
+        serializer = PasswordChangeSerializer(
+            data=request.data,
+            context={"request": request},
+        )
+        serializer.is_valid(raise_exception=True)
+
+        with transaction.atomic():
+            user = request.user
+            user.set_password(serializer.validated_data["new_password"])
+            User.objects.filter(pk=user.pk).update(
+                password=user.password,
+                session_version=F("session_version") + 1,
+            )
+            user.refresh_from_db()
+
+        return Response({"session_version": user.session_version})
 
 
 class PrivateLoginView(APIView):

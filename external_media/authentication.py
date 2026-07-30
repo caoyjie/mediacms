@@ -56,9 +56,7 @@ class InactiveBffUser(APIException):
 
 class BffUserAuthentication(BaseAuthentication):
     def authenticate_header(self, request) -> str | None:
-        value = request.headers.get("Authorization", "")
-        scheme, _, _ = value.partition(" ")
-        return "Bearer" if scheme.lower() == "bearer" else None
+        return "Bearer"
 
     def authenticate(self, request):
         value = request.headers.get("Authorization", "")
