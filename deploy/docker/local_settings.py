@@ -12,6 +12,7 @@ DATABASES = {
         "PORT": os.getenv('POSTGRES_PORT', '5432'),
         "USER": os.getenv('POSTGRES_USER', 'mediacms'),
         "PASSWORD": os.getenv('POSTGRES_PASSWORD', 'mediacms'),
+        "CONN_HEALTH_CHECKS": True,
         "OPTIONS": {
             "pool": {
                 "min_size": 2,

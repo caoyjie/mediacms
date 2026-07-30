@@ -417,6 +417,7 @@ DATABASES = {
         "PORT": "5432",
         "USER": "mediacms",
         "PASSWORD": "mediacms",
+        "CONN_HEALTH_CHECKS": True,
         "OPTIONS": {
             "pool": {
                 "min_size": 2,
