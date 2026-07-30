@@ -59,6 +59,26 @@ class ExternalMediaApiTest(TestCase):
         self.assertEqual(Media.objects.filter(backend_media_id="backend-asset-1").count(), 1)
         self.media_init_mock.assert_not_called()
 
+    @override_settings(
+        DO_NOT_TRANSCODE_VIDEO=True,
+        SHOW_ORIGINAL_MEDIA=True,
+    )
+    def test_external_media_detail_does_not_require_a_local_file(self) -> None:
+        created = self.post()
+        media = Media.objects.get(id=created.json()["id"])
+
+        response = self.client.get(
+            f"/api/v1/media/{media.friendly_token}"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json()["hls_info"]["master_file"],
+            self.payload["external_hls_url"],
+        )
+        self.assertEqual(response.json()["encodings_info"], {})
+        self.assertIsNone(response.json()["original_media_url"])
+
     def test_post_upserts_external_subtitles_idempotently(self) -> None:
         payload = {
             **self.payload,

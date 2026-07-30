@@ -679,6 +679,8 @@ class Media(models.Model):
 
         if self.media_type not in ["video"]:
             return ret
+        if self.external_hls_url:
+            return ret
         for key in ENCODE_RESOLUTIONS_KEYS:
             ret[key] = {}
 
@@ -754,6 +756,8 @@ class Media(models.Model):
     def original_media_url(self):
         """Property used on serializers"""
 
+        if not self.media_file:
+            return None
         if settings.SHOW_ORIGINAL_MEDIA:
             return helpers.url_from_path(self.media_file.path)
         else:
