@@ -122,6 +122,7 @@ class ExternalMediaSerializer(serializers.ModelSerializer):
         media = Media.objects.create(
             user=owner,
             media_file="",
+            encoding_status="success",
             **validated_data,
         )
         if subtitles is not None:
@@ -133,6 +134,8 @@ class ExternalMediaSerializer(serializers.ModelSerializer):
         validated_data.pop("owner_username", None)
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
+        if instance.external_hls_url:
+            instance.set_encoding_status()
         instance.save()
         if subtitles is not None:
             reconcile_external_subtitles(instance, subtitles)

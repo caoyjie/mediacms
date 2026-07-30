@@ -633,6 +633,10 @@ class Media(models.Model):
         """Set encoding_status for videos
         Set success if at least one mp4 or webm exists
         """
+        if self.external_hls_url:
+            self.encoding_status = "success"
+            return True
+
         mp4_statuses = set(encoding.status for encoding in self.encodings.filter(profile__extension="mp4", chunk=False))
         webm_statuses = set(encoding.status for encoding in self.encodings.filter(profile__extension="webm", chunk=False))
 

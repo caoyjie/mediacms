@@ -76,8 +76,10 @@ class ExternalMediaApiTest(TestCase):
             response.json()["hls_info"]["master_file"],
             self.payload["external_hls_url"],
         )
+        self.assertEqual(response.json()["encoding_status"], "success")
         self.assertEqual(response.json()["encodings_info"], {})
         self.assertIsNone(response.json()["original_media_url"])
+        self.assertTrue(media.listable)
 
     def test_post_upserts_external_subtitles_idempotently(self) -> None:
         payload = {
@@ -102,6 +104,31 @@ class ExternalMediaApiTest(TestCase):
         media = Media.objects.get(backend_media_id="backend-asset-1")
         self.assertEqual(media.subtitles.count(), 1)
         self.assertEqual(second.json()["subtitles"], payload["subtitles"])
+
+    def test_patch_recovers_pending_external_media(self) -> None:
+        created = self.post()
+        media = Media.objects.get(id=created.json()["id"])
+        Media.objects.filter(id=media.id).update(
+            encoding_status="pending",
+            listable=False,
+        )
+
+        response = self.client.patch(
+            f"/internal/api/external-media/{self.payload['backend_media_id']}/",
+            data=json.dumps(
+                {
+                    "version": created.json()["version"],
+                    "description": "Updated external video",
+                }
+            ),
+            content_type="application/json",
+            HTTP_AUTHORIZATION="Bearer publishing-secret",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        media.refresh_from_db()
+        self.assertEqual(media.encoding_status, "success")
+        self.assertTrue(media.listable)
 
     def test_patch_removes_only_omitted_external_subtitles(self) -> None:
         created = self.post(

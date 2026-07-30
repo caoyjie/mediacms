@@ -27,6 +27,17 @@ class ExternalAssetTest(TestCase):
 
         self.assertEqual(self.media.hls_info["master_file"], self.media.external_hls_url)
 
+    def test_external_hls_is_complete_without_local_encodings(self) -> None:
+        self.media.external_hls_url = (
+            "https://media.ygcyj.xin/media/m1/hls/master.m3u8"
+        )
+        self.media.encoding_status = "pending"
+        self.media.save()
+
+        self.media.set_encoding_status()
+
+        self.assertEqual(self.media.encoding_status, "success")
+
     def test_external_cover_wins_over_local_thumbnail(self) -> None:
         self.media.external_cover_url = "https://media.ygcyj.xin/media/m1/images/cover.jpg"
         self.media.save()
