@@ -181,6 +181,9 @@ stateDiagram-v2
 - 恢复能力显示为 `Ready to resume`、`File selection required`、`Verifying uploaded parts` 或 `Cannot resume`，不得只显示模糊的支持/不支持。
 - IndexedDB必须具有显式schema version、逐版本迁移和事务失败处理；容量不足、隐私模式或持久化申请失败不得破坏服务端会话。
 - File System Access重新授权只能由管理员操作触发；初始化时不得自动弹出文件权限请求。可尝试持久存储，但Django/S3证据始终覆盖本地状态。
+- 移动浏览器后台、锁屏或系统回收可能暂停/终止XHR，前端不得承诺后台持续上传。进入hidden后不启动新Part，返回visible或`pageshow`后立即与Django/S3对账。
+- 移动端同一时刻只读取并上传一个Part；释放当前Part buffer后才能读取下一Part。快速指纹只读取固定头尾区段，不得为指纹把完整媒体载入内存。
+- 浏览器导致的中断显示 `Upload paused by the browser`，不能误报为普通网络失败；上传页提示 `Keep this page open while uploading. You can resume if the upload is interrupted.`。
 
 ## 7. 全局任务中心与长期历史
 
@@ -336,6 +339,8 @@ API 错误使用稳定 `error_code + safe_message + allowed_actions`，前端禁
 - 站内通知、可选浏览器通知、能力不兼容阻止上传和安全降级。
 - `pagehide/pageshow`、bfcache恢复、前后台切换和无`unload`监听器。
 - Task Drawer桌面非模态、移动模态的焦点进入、循环、Escape关闭和焦点恢复。
+- 移动浏览器锁屏、切换App、页面回收、Wi-Fi/蜂窝切换后的Part对账与恢复。
+- 旋转设备不得自动进入/退出全屏；用户触发全屏后的orientation lock失败必须安全回退。
 
 ### 12.4 非功能
 
@@ -403,6 +408,7 @@ flowchart TB
 - 移动端支持任务查看、CRUD、播放和普通媒体上传；HLS ZIP正式支持仅限桌面。
 - 不依赖Background Fetch。Web Locks/BroadcastChannel缺失时退化为服务端租约和普通轮询。
 - 使用能力检测而不是User-Agent决定功能。
+- `navigator.connection`只能作为可选性能信号，不参与正确性判断；`online`事件只触发服务探测。
 
 ## 16. 媒体编辑与播放入口
 

@@ -105,6 +105,10 @@ Categories
 - `Create task`提交后立即禁用并显示pending；请求携带Idempotency-Key，防止双击创建重复任务。
 - 返回上一步保留已录入字段；切换Source会清除来源专属字段，必须先确认。
 - 离开提醒只用于未保存元数据或尚未创建的草稿。跨页面上传恢复文案使用 `Upload will resume on the next page`。
+- 窄屏Stepper只显示 `Step 2 of 4 · Input` 这类当前步骤摘要，不强行排列四个完整标题。
+- 移动端步骤操作栏sticky置底并加入safe-area padding；Back和Continue在滚动、软键盘收起后始终可找到。
+- 文件选择器返回后焦点落到文件摘要。Metadata输入字号至少16px；YouTube字段使用`type="url"`、`inputmode="url"`并关闭自动大写和拼写检查。
+- 移动端上传阶段显示 `Keep this page open while uploading. You can resume if the upload is interrupted.`，不得声称锁屏或切换App后仍持续传输。
 
 ## 4. Task Drawer
 
@@ -143,6 +147,8 @@ Categories
 - 桌面端是非模态 complementary panel，不使背景页面失效；打开后焦点移到抽屉标题，关闭后返回Header任务按钮。
 - 移动端全屏是modal dialog：背景inert，Tab/Shift+Tab限制在抽屉内，Escape关闭，并具有可见Close按钮和可访问名称。
 - 删除、取消等不可逆确认使用alertdialog，初始焦点放在非破坏性操作。
+- 移动端Drawer使用动态视口高度，Header与底部操作栏固定、内容区独立滚动；打开时保存并锁定背景滚动，关闭后恢复原位置。
+- 从Drawer进入完整Task Center时先关闭Drawer；任务确认框不得形成modal套modal。
 
 ## 5. Task center
 
@@ -160,6 +166,8 @@ Categories
 - 趋势使用 Chart.js；KPI、比例条优先使用 React/SCSS；每个 canvas 图表必须有等价文本或表格。
 - Attempt 时间线使用语义化 HTML/CSS，不引入额外时间线库。
 - `@zip.js/zip.js`只在选择HLS package后动态加载；Chart.js只在展开Insights后动态加载。长期历史继续服务端分页，首期不引入虚拟列表。
+- 移动任务卡默认只显示title、display status、progress、updated time和首要action；Source、Attempt、队列、速度和错误详情在展开区显示。
+- 移动筛选使用全屏或bottom sheet，固定提供Status、Source、Date、Apply filters和Clear filters；应用或返回后保持列表滚动位置。
 
 ## 6. 媒体列表与编辑页
 
@@ -205,6 +213,13 @@ Categories
 - Poster、WebVTT 和 HLS 共用 CloudFront Signed Cookie 授权域。
 - Cookie 过期导致资源失败时暂停、重新 Bootstrap，并从原位置恢复；不得暴露 candidate URL。
 - 进度保存失败不打断播放，只显示 `Playback progress could not be saved`。
+- 设备旋转只触发响应式重排，不得自动调用全屏。全屏只能由用户操作触发；进入全屏后可尽力锁定横屏，失败静默回退，退出时解除锁定。
+- 移动控制条固定优先级为Play/Pause、Time、Spacer、Settings、Fullscreen，主要触控区域至少44×44px；不得为塞入全部按钮而缩小到26px或取消间距。
+- Quality、Subtitles、Playback speed、Autoplay和Chapters进入Settings面板；直接CC按钮可隐藏，但字幕能力必须始终可从Settings访问。
+- 移动Resume提示使用控制条上方的轻量底部面板，不遮挡字幕；`Resume`为主要操作，但不得强制自动播放。
+- 必须移除播放器对`:focus`/`:focus-visible`的全局`outline: none`覆盖，并为播放、设置、字幕、质量和全屏等控件提供高对比焦点环。
+- 字幕位置依据实际控制条和面板高度计算，不使用多组固定`em`偏移；普通与双语字幕均不得被Resume、错误或Settings面板覆盖。
+- 字幕至少提供`Small`、`Default`、`Large`显示偏好并在浏览器保存；双语字幕优先每种语言一行，避免占据超过约30%的视频高度。
 
 ## 8. 管理员设置
 
@@ -241,6 +256,9 @@ Categories
 - `<768px`：沿用移动 Header；向导单列；表格转卡片；Task Drawer 全屏。
 - 移动端正式支持视频/音频基础上传、CRUD、任务查看和播放。
 - HLS ZIP 正式支持桌面端；移动端显示 `HLS package import is available on desktop browsers.`。
+- 全局viewport保持用户缩放并增加`viewport-fit=cover`，禁止`maximum-scale=1`和`user-scalable=no`。
+- 全屏Drawer和移动面板使用`100vh`回退及`100dvh`动态高度，并通过`env(safe-area-inset-*)`保护刘海、圆角和底部Home Indicator。
+- 软键盘出现时当前输入和主要操作必须保持可见；不得以固定viewport高度推算键盘空间。
 
 ## 11. 技术整合与验收
 
@@ -250,6 +268,7 @@ Categories
 - 新文案集中在英语文案模块，避免散落硬编码并保留未来国际化边界。
 - capabilities、TaskView、`allowed_actions` 和 asset version 是前端能力与状态的唯一依据。
 - 主站`react`、`react-dom`与对应类型保持17.x；播放器独立保持19.x。共享模块不得依赖React，构建检查必须阻止跨Root组件导入。
+- 列表Thumbnail与播放器Poster使用不同响应式尺寸，容器固定`aspect-ratio`且非首屏图片lazy load；授权恢复只重试失败图片且每次失败最多自动恢复一次。
 
 必须验证：
 
@@ -274,6 +293,12 @@ Categories
 - 在`prefers-reduced-motion`之外补充`forced-colors`和高对比度样式。
 - 使用PerformanceObserver记录Add media首次可交互、Task Center渲染和播放器启动耗时；事件不得包含媒体标题、URL、S3 Key或签名信息。
 - 将主站Browserslist与“最近两个主要版本”的已批准浏览器基线统一，并记录构建体积和polyfill变化。
+- 使用真实iPhone Safari和Android Chrome覆盖竖屏、横屏及约360px高度的短视口，不以DevTools模拟替代最终验收。
+- 测试来电、锁屏、切换App、浏览器回收和Wi-Fi/蜂窝切换后的上传、轮询、授权与播放恢复。
+- 验证Android Back按层级先关闭Settings/筛选/Drawer，再执行页面导航。
+- 覆盖200%字体放大、系统粗体、移动forced-colors以及长标题两行截断/详情完整显示。
+- 覆盖普通Metadata、Tags、YouTube URL和Cookie上传时的虚拟键盘遮挡与焦点恢复。
+- 可记录移动上传恢复率、Part重试数和播放器首帧时间，但不得记录文件名、标题、URL或签名信息。
 
 ## 13. 最佳实践依据
 
@@ -282,3 +307,6 @@ Categories
 - [React External Store Guidance](https://react.dev/reference/react/useSyncExternalStore)：外部可变数据的稳定订阅边界；主站React 17采用等价的Provider订阅模式，不调用React 18 API。
 - [Back/forward cache guidance](https://web.dev/articles/bfcache)：使用`pagehide/pageshow`并避免`unload`。
 - [File System Access guidance](https://developer.chrome.com/docs/capabilities/web-apis/file-system-access)：文件权限请求必须由用户操作触发。
+- [Accessible tap targets](https://web.dev/articles/accessible-tap-targets)：移动触控目标与间距。
+- [CSS dynamic viewport units](https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Values/length) 与 [safe-area environment variables](https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Values/env)：移动动态视口和设备安全区。
+- [Screen Orientation lock](https://developer.mozilla.org/en-US/docs/Web/API/ScreenOrientation/lock)：全屏和方向锁定的能力限制。
