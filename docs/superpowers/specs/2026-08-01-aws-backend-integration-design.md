@@ -35,6 +35,8 @@
 - 所有可观测阶段都必须在前端显示清晰进度。界面同时展示当前阶段、阶段进度、总体进度、已处理字节或项目数、可执行操作和错误信息；不得使用与真实工作无关的定时递增伪进度。
 - 支持单个视频或音频文件。音频由 MediaConvert 生成私有音频 HLS，并使用管理员上传、来源提供或系统默认的音频封面。
 - 全系统重任务严格串行。新任务进入 FIFO 等待队列；数据库全局执行租约和 Celery Worker `concurrency=1` 共同保证任何时刻只有一个任务执行处理链。
+- 现有 `Media.state` 继续表示 `private/public/unlisted` 发布可见性；新增 `processing_status` 表示 AWS 媒体就绪状态。Job执行、清理和 MediaConvert供应商状态分别保存，不混用一套枚举。
+- MediaConvert MVP 通过 `GetJob` 每 10–15 秒轮询状态；不引入 EventBridge。`COMPLETE` 仅表示 AWS 输出已写入 S3，之后仍须验证并原子激活资源。
 
 ## 3. 方案选择
 
@@ -130,7 +132,9 @@ flowchart LR
 erDiagram
     Media ||--o{ MediaIngestionJob : processes
     MediaIngestionJob ||--o{ MediaJobAttempt : retries
-    MediaIngestionJob ||--o{ MediaAsset : produces
+    Media ||--o{ MediaAssetVersion : owns
+    MediaAssetVersion ||--o{ MediaAsset : contains
+    MediaJobAttempt ||--o| MediaAssetVersion : produces
     MediaIngestionJob ||--o| MultipartUpload : receives
     Media ||--o{ Subtitle : exposes
 
@@ -140,8 +144,8 @@ erDiagram
         string status
         string stage
         int progress
-        string active_checkpoint
         bool cancel_requested
+        string cleanup_status
         json source_metadata
         text safe_error
     }
@@ -152,18 +156,29 @@ erDiagram
         string status
         string celery_task_id
         string mediaconvert_job_id
+        string provider_status
+        string provider_phase
+        int provider_percent_complete
         json checkpoint_evidence
         json diagnostic_error
     }
 
+    MediaAssetVersion {
+        uuid id
+        string status
+        string manifest_key
+        datetime activated_at
+        datetime retired_at
+    }
+
     MediaAsset {
         uuid id
+        uuid version_id
         string kind
         string s3_key
         string content_type
         bigint size
         string checksum
-        bool active
     }
 
     MultipartUpload {
@@ -179,64 +194,114 @@ erDiagram
 ### 5.1 模型约束
 
 - `Media` 在提交时立即以草稿创建，可持续编辑标题、描述、标签和分类。
+- `Media.state` 保留现有 `private/public/unlisted` 语义；新增 `processing_status=draft/queued/processing/ready/failed`。现有 `encoding_status` 作为兼容投影维护：`draft/queued → pending`、`processing → running`、`ready → success`、`failed → fail`。
 - `MediaIngestionJob` 表示一次逻辑导入；重试或恢复不得创建重复媒体。
 - `MediaJobAttempt` 保存每次实际执行记录，用于审计、诊断和恢复。
-- `MediaAsset` 保存精确 S3 Key，不依赖扫描 Bucket，也不把临时签名 URL写入数据库。
-- 一个媒体同一时间只能有一组 `active=True` 的正式播放资源。
+- `MediaAssetVersion` 聚合一次 Attempt 的完整候选资源集，状态为 `candidate/active/retired`。
+- `MediaAsset` 归属于版本并保存精确 S3 Key，不依赖扫描 Bucket，也不把临时签名 URL写入数据库；不再维护逐资源 `active` 布尔字段。
+- `Media.active_asset_version` 是唯一播放指针。候选版本验证完成后，通过一次数据库事务切换外键并把旧版本标为 retired。
 - 管理员修改过的元数据字段需要记录人工修改状态；自动探测只补充尚未人工确认的字段。
 
-## 6. 任务状态机
+## 6. 状态模型
+
+### 6.1 Media处理状态
 
 ```mermaid
 stateDiagram-v2
     [*] --> draft
-    draft --> uploading: 本地文件或 HLS ZIP
-    draft --> analyzing: YouTube URL
-    uploading --> source_ready: Multipart 完成并校验
-    analyzing --> source_ready: yt-dlp 下载并上传
-    source_ready --> processing
-    processing --> verifying
-    verifying --> publishing
-    publishing --> ready
-    ready --> cleaning: 清理后端临时资源
-    cleaning --> completed: 清理完成
-    cleaning --> cleanup_pending: 清理可重试
-    cleanup_pending --> cleaning: 后台重试
-
-    uploading --> failed
-    analyzing --> failed
-    processing --> failed
-    verifying --> failed
-    publishing --> failed
-
-    failed --> uploading: 上传未完成
-    failed --> analyzing: 来源未完成
-    failed --> processing: 原文件检查点有效
-    failed --> verifying: MediaConvert 已完成
-    failed --> publishing: 输出校验已完成
-
-    draft --> canceled
-    uploading --> canceling
-    analyzing --> canceling
-    processing --> canceling
-    canceling --> canceled
+    draft --> queued: 来源提交完成
+    queued --> processing: Job取得执行租约
+    processing --> ready: 活动资源版本切换成功
+    processing --> failed: 首次处理失败
+    failed --> queued: Resume或重跑
+    ready --> ready: 替换Job在后台处理，旧版本保持活动
 ```
+
+`Media.state` 的 `private/public/unlisted` 发布工作流独立存在，不出现在上图。已有列表逻辑继续使用 `state + encoding_status + is_reviewed`；AWS处理状态通过兼容投影更新 `encoding_status`。
+
+### 6.2 Job执行与清理状态
+
+```mermaid
+stateDiagram-v2
+    [*] --> queued
+    queued --> running: 取得全局租约
+    running --> completed: 媒体发布完成
+    running --> failed: 永久错误或重试耗尽
+    running --> canceled: 取消和必要清理确认
+    failed --> queued: 创建新 Attempt 后 Resume
+```
+
+`cleanup_status` 独立为 `pending/running/failed/completed`。媒体激活后保持 `ready`，Job可进入 `completed`；后续清理失败只改变 `cleanup_status`，不撤销媒体可播放状态。
+
+### 6.3 MediaConvert供应商状态
+
+MediaConvert API的核心 Job状态为 `SUBMITTED/PROGRESSING/COMPLETE/CANCELED/ERROR`。`PROGRESSING` 期间的 `currentPhase` 为 `PROBING/TRANSCODING/UPLOADING`。EventBridge 的 `INPUT_INFORMATION`、`STATUS_UPDATE`、`NEW_WARNING` 和 `QUEUE_HOP` 是事件类型，不写入 `provider_status`。
+
+```mermaid
+stateDiagram-v2
+    [*] --> SUBMITTED
+    SUBMITTED --> PROGRESSING
+    PROGRESSING --> COMPLETE
+    SUBMITTED --> CANCELED
+    PROGRESSING --> CANCELED
+    SUBMITTED --> ERROR
+    PROGRESSING --> ERROR
+
+    state PROGRESSING {
+        [*] --> PROBING
+        PROBING --> TRANSCODING
+        TRANSCODING --> UPLOADING
+    }
+```
+
+| MediaConvert状态 | 本地 Job阶段 | 处理 |
+| --- | --- | --- |
+| `SUBMITTED` | `mediaconvert_waiting` | 显示等待；不伪造百分比 |
+| `PROGRESSING/PROBING` | `mediaconvert_probing` | 显示探测阶段 |
+| `PROGRESSING/TRANSCODING` | `mediaconvert_transcoding` | 使用非空 `jobPercentComplete` |
+| `PROGRESSING/UPLOADING` | `mediaconvert_uploading` | 等待 AWS 完成 S3 写入 |
+| `COMPLETE` | `verifying_outputs` | 继续验证，不能直接发布 |
+| `ERROR` | `failed` | 保存脱敏错误并允许从转码节点重试 |
+| `CANCELED` | `canceled` 或 `failed` | 有本地取消意图时为 canceled，否则视为异常失败 |
+
+MVP由短时 Celery轮询任务每 10–15 秒执行 `GetJob` 后立即返回，不占住 Worker进程；逻辑 Job继续持有全局执行租约。`jobPercentComplete` 为空时前端显示不确定进度。EventBridge保留为未来扩展，不进入 MVP。
+
+AWS官方参考：
+
+- [Monitoring MediaConvert job progress](https://docs.aws.amazon.com/mediaconvert/latest/ug/how-mediaconvert-jobs-progress.html)
+- [MediaConvert Job API](https://docs.aws.amazon.com/mediaconvert/latest/apireference/jobs-id.html)
+- [MediaConvert EventBridge event list](https://docs.aws.amazon.com/mediaconvert/latest/ug/mediaconvert_event_list.html)
+
+`jobPercentComplete` 只是估算值，并可能对部分输入返回空；数据库不得据此判断完成，终态只认 `status`，完成后再验证 S3输出。
 
 ## 7. 持久化检查点与恢复
 
-检查点按执行顺序为：
+检查点按来源形成有向图，不强制所有任务经过一条线性序列：
 
-1. `multipart_initialized`
-2. `source_uploaded`
-3. `source_verified`
-4. `youtube_metadata_resolved`
-5. `subtitles_prepared`
-6. `mediaconvert_submitted`
-7. `mediaconvert_completed`
-8. `outputs_verified`
-9. `assets_activated`
-10. `media_published`
-11. `local_cleanup_completed`
+```mermaid
+flowchart TD
+    VS[source_verified] --> OV[outputs_verified]
+    OV --> AA[assets_activated]
+    AA --> MP[media_published]
+    MP --> LC[local_cleanup_completed]
+
+    VS --> MC1[mediaconvert_submitted]
+    MC1 --> MC2[mediaconvert_completed]
+    MC2 --> OV
+
+    VS --> HM[hls_manifest_verified]
+    HM --> OV
+
+    YM[youtube_metadata_resolved] --> YD[youtube_downloaded]
+    YD --> VS
+    YD --> SS[subtitles状态]
+    SS --> MC1
+```
+
+- 本地视频和音频走 `source_verified → mediaconvert_submitted → mediaconvert_completed → outputs_verified`。
+- HLS ZIP走 `source_verified → hls_manifest_verified → outputs_verified`，跳过完整视频转码；单帧图片任务单独记录证据。
+- YouTube先记录 metadata和 download，再进入通用 source与 MediaConvert节点。
+- 字幕节点记录 `available/unavailable/failed_retryable`。`unavailable` 是合法终态；`failed_retryable` 允许视频先发布并由独立字幕 Attempt重试。
 
 每个检查点必须保存验证证据，例如 S3 Key、S3 Version ID、ETag 或 Checksum、对象大小、MediaConvert Job ID 和实际输出清单。恢复前必须重新验证证据；如果对象不存在或校验不符，任务回退到最近仍有效的检查点。
 
@@ -261,7 +326,7 @@ stateDiagram-v2
 
 无论任务成功、失败或取消，Cookie 明文临时文件都必须在当前 Worker 执行的 `finally` 路径立即删除。失败和取消任务保留数据库检查点及 S3 中已确认允许保留的对象，但不依赖本地文件恢复。
 
-清理采用幂等实现：目标不存在视为成功；只能删除任务专属工作目录和数据库明确记录的临时对象。清理失败不撤销已经可播放的媒体，而是将任务标记为 `cleanup_pending`，通过独立 Celery 任务重试并在管理界面提示占用空间。
+清理采用幂等实现：目标不存在视为成功；只能删除任务专属工作目录和数据库明确记录的临时对象。清理失败不撤销已经可播放的媒体，而是将 Job的 `cleanup_status` 标记为 `failed`，通过独立 Celery任务重试并在管理界面提示占用空间。
 
 Worker 启动时扫描超过租约时间的孤立工作目录，并仅在确认没有活动任务持有租约后清理。主机同时配置临时目录容量上限、任务级大小上限和最小剩余磁盘阈值；达到阈值时停止启动新的 yt-dlp 任务。
 
@@ -313,8 +378,8 @@ flowchart TD
     G --> H[解析入口 m3u8 并验证全部引用]
     H --> I[提升为正式 HLS 前缀]
     I --> J[MediaConvert Frame Capture]
-    J -->|支持| K[生成缩略图和封面]
-    J -->|不支持| L[受限 FFmpeg 远程读取并截取单帧]
+    J -->|支持| K[从首个有效帧生成缩略图和封面]
+    J -->|不支持| L[boto3下载最少清单与分片后受限 FFmpeg 截帧]
     K --> M[激活资源]
     L --> M
 ```
@@ -328,6 +393,8 @@ HLS 导入遵循以下安全规则：
 - 主清单不唯一时，由管理员在上传前选择入口。
 - 完成状态以 S3 对象、大小、Checksum 和清单引用闭包为准，不以浏览器上报的 `100%` 为准。
 - 正式激活前规范化相对 URI，确保所有请求都位于该媒体的 CloudFront 前缀内。
+- MVP明确拒绝包含 `EXT-X-KEY`、外部 Key URI或 DRM声明的加密 HLS；支持范围扩展前不尝试复制或重写密钥。
+- FFmpeg回退由 Worker使用 boto3读取并解析 S3入口清单，只下载生成首个有效帧所需的最少清单和分片到任务临时目录。不得把预签名主清单 URL直接交给 FFmpeg并假设相对分片自动获得授权。
 
 ### 8.3 YouTube 单视频
 
@@ -382,6 +449,7 @@ flowchart LR
 - 字幕语言代码与显示名称分离。
 - 双语合并沿用 `ytdlp-tool` 的 JSON3 Cue 对齐思路，并重构为独立、可测试的项目模块。
 - 同一媒体同一语言与轨道标识保持幂等更新。
+- 字幕检查点保存状态、发现的语言、人工/自动来源、已发布 S3 Key和安全错误码；不得仅用一个布尔完成标记。
 - S3 保存规范化后的 WebVTT；数据库保存精确 S3 Key，API 输出 CloudFront URL。
 - 字幕上传、替换和删除继续使用现有 MediaCMS 交互；删除时同步安排对应 S3 对象清理。
 - 字幕处理失败不使视频转码失败。视频可以进入 ready；有可恢复来源时界面显示字幕子任务失败并允许单独重试，否则显示暂无可用字幕。
@@ -420,7 +488,7 @@ flowchart LR
 | yt-dlp 下载 | yt-dlp Progress Hook 的已下载字节 / 总字节 |
 | 原文件上传 S3 | boto3 Transfer Callback 已传字节，并以 S3 校验结果收尾 |
 | 字幕处理 | 已完成轨道数 / 计划轨道数 |
-| MediaConvert | AWS Job `JobPercentComplete`；缺失时显示不确定进度条 |
+| MediaConvert | `GetJob` 的 `status/currentPhase/jobPercentComplete`；百分比缺失时显示不确定进度条 |
 | 输出校验 | 已验证对象或检查项 / 预期总数 |
 | 发布 | 已完成的原子发布步骤 / 发布步骤总数 |
 | 本地清理 | 已清理资源项 / 待清理资源项 |
@@ -448,7 +516,8 @@ flowchart LR
 - 帧率和像素宽高比从源文件继承。
 - 只输出不大于源分辨率的档位，禁止放大。
 - 源视频低于 480p 时，输出一个保持源分辨率的 HLS 档位。
-- MediaConvert 在视频约 10% 时间点生成 `1280×720` Poster 和 `640×360` Thumbnail；短视频使用最小有效偏移。
+- MediaConvert 从首个有效视频帧生成 `1280×720` Poster 和 `640×360` Thumbnail；不承诺固定在视频 10% 时间点。
+- 输出宽高必须归一化为 H.264 可接受的正偶数；低于 480p 的特殊尺寸源不得直接使用奇数宽高创建输出。
 - 图片生成失败时使用项目默认图片；视频 HLS 缺失必须判定任务失败。
 - 导入的现有 HLS 不重新编码，只进行清单校验、图片生成和资源激活。
 
@@ -464,7 +533,7 @@ flowchart LR
 
 ## 12. 版本化资源与原子激活
 
-MediaConvert 和上传流程写入版本化前缀：
+MediaConvert 和上传流程写入 `MediaAssetVersion` 对应的版本化前缀：
 
 ```text
 media/{media_uuid}/versions/{attempt_uuid}/
@@ -481,30 +550,32 @@ media/{media_uuid}/versions/{attempt_uuid}/
 
 ```mermaid
 flowchart TD
-    A[候选资源写入版本前缀] --> B[MediaConvert COMPLETE]
-    B --> C[验证 Master Playlist]
+    A[候选资源写入版本前缀] --> B{来源处理完成}
+    B -->|MediaConvert COMPLETE| C[验证 Master Playlist]
+    B -->|HLS manifest verified| C
     C --> D[递归验证子清单和分片]
     D --> E[验证图片和字幕]
     E --> F{全部必需资源有效?}
     F -->|否| G[保留当前活动版本并标记失败]
-    F -->|是| H[数据库事务切换 active version]
+    F -->|是| H[数据库事务切换 Media.active_asset_version]
     H --> I[Media 进入 ready]
     I --> J[延迟清理旧非活动版本]
 ```
 
 激活原则：
 
-- `MediaAsset` 保存 S3 Key，Media 通过活动资源版本关联，不保存临时签名 URL。
+- `MediaAssetVersion` 聚合候选清单及全部 `MediaAsset`；`MediaAsset` 保存 S3 Key，不保存临时签名 URL。
 - 重跑任务不覆盖当前可播放资源。
-- 只有候选版本全部验证通过后，才在一个数据库事务中切换活动版本。
+- 只有候选版本全部验证通过后，才在一个数据库事务中更新 `Media.active_asset_version`，把候选版本标为 active并把旧版本标为 retired。
+- 数据库对每个 Media最多一个 active版本建立条件唯一约束；播放读取以 `Media.active_asset_version` 外键为准，不扫描 `status=active`。
 - 迟到的旧 Attempt 结果不能覆盖新 Attempt；激活时必须比较任务版本。
 - 激活失败时保留上一版在线；首次处理失败则 Media 保持草稿或失败状态。
 - 旧版本延迟清理，避免正在播放的客户端在切换瞬间丢失分片。
 - S3 生命周期规则清理过期 Multipart 和长期未引用的临时前缀；数据库任务仍负责精确清理。
 
-## 13. CloudFront 播放授权
+## 13. CloudFront媒体授权
 
-MediaCMS 页面域和 CloudFront 媒体域使用同一主域下的不同子域。CloudFront 配置两个行为，使签名 Cookie 由媒体域本身设置：
+MediaCMS 页面域和 CloudFront 媒体域使用同一主域下的不同子域。CloudFront 配置两个行为，使签名 Cookie 由媒体域本身设置。授权不是“点击播放”时才启动：管理员登录后首次进入任何包含受保护媒体资源的页面，就必须完成 Cookie Bootstrap，确保媒体列表缩略图也可加载。
 
 ```mermaid
 flowchart LR
@@ -514,7 +585,7 @@ flowchart LR
     Auth[CloudFront /auth/* Origin<br/>回源 MediaCMS]
     S3[S3 OAC Origin]
 
-    Browser -->|1. 同源请求播放授权| App
+    Browser -->|1. 打开媒体库并请求授权| App
     App -->|2. 返回 60 秒一次性 Handoff Grant| Browser
     Browser -->|3. POST /auth/refresh| CF
     CF --> Auth
@@ -541,6 +612,14 @@ Cookie 安全属性：
 - Handoff Grant 最多有效 60 秒、只能使用一次，并绑定唯一管理员会话版本。
 - 签名私钥仅保存在 Django 服务端，不进入前端、日志或数据库明文字段。
 
+前端使用单例 `MediaAuthorizationProvider` 管理授权：
+
+- 登录后进入媒体库、媒体详情、播放列表等受保护页面时检查授权，并在需要时 Bootstrap。
+- Django只向前端暴露非敏感的 `expires_at` 镜像值；前端不读取三项 HttpOnly签名 Cookie。
+- Thumbnail、Poster或其他媒体图片遇到授权型 `403` 时触发一次全局刷新，并为失败图片增加 cache-busting重载。
+- 播放器复用同一授权状态，在到期前续期，不重复建立独立 Cookie会话。
+- 登出统一调用媒体域 `/auth/logout`。
+
 ## 14. 播放器行为
 
 ```mermaid
@@ -566,6 +645,7 @@ stateDiagram-v2
 - 遇到授权型 `403` 时只自动刷新一次 Cookie，重新加载 HLS 并恢复原播放时间。
 - 登出时调用媒体域 `/auth/logout` 清除三项 CloudFront Cookie。
 - Poster、Thumbnail 和 WebVTT 同样从 CloudFront `/media/*` 获取并受相同 Cookie 保护。
+- 页面内图片和播放器共用一次授权刷新锁，避免多个并发 `403` 重复兑换 Handoff Grant。
 
 ## 15. 全局串行队列
 
@@ -578,6 +658,7 @@ flowchart LR
 ```
 
 - 新任务允许创建草稿并完成浏览器直传，但进入处理链时必须排队。
+- 本地文件和 HLS ZIP在 `source_verified` 前由 `MultipartUpload` 跟踪，Media保持 draft；验证成功后才把 Job置为 queued并参与 FIFO。YouTube URL提交后可直接进入 queued，由取得租约的 Job执行探测和下载。
 - FIFO 顺序使用数据库提交时间和不可变任务 ID 确定；管理员可以取消等待任务。
 - 数据库保存全局执行租约、持有任务、租约版本和过期时间。Worker 必须通过条件更新原子获取租约。
 - Celery Worker 固定 `concurrency=1`，但数据库租约仍是防止重复 Worker、服务重启和运维误配置并发的最终保护。
@@ -590,11 +671,11 @@ flowchart LR
 
 - `draft`：元数据可编辑，尚未提交来源。
 - `queued`：显示排队位置和前序任务状态。
-- `uploading/analyzing/processing`：显示阶段进度和总体进度。
+- `processing`：显示 Job的具体 stage及阶段/总体进度，不把 stage复制为 Media状态。
 - `ready`：加载远端 HLS 播放器。
 - `failed`：显示安全错误、失败阶段和可用恢复节点。
-- `cleanup_pending`：媒体仍可播放，同时提示临时资源清理正在重试。
-- `canceled`：允许从有效来源检查点恢复或删除草稿。
+- Job的 `cleanup_status=failed`：Media仍保持 ready，同时提示临时资源清理正在重试。
+- Job为 `canceled`：Media保持 draft或上一活动版本的 ready状态，并允许从有效来源检查点恢复或删除草稿。
 
 ## 16. 单管理员模式
 
@@ -617,12 +698,40 @@ flowchart TD
 | 评论和回复 | 路由关闭，媒体详情不加载 |
 | 分享和 MediaPermission | 路由关闭，不显示分享控件 |
 | 点赞、点踩、评分、举报 | 写 API 关闭，不显示统计控件 |
-| RBAC、SAML、LTI、身份源 | Django App 和 URL 可配置禁用 |
+| RBAC、SAML、LTI、身份源 | 首期保留 App与迁移；禁用 URL、前端入口、写 API和信号副作用 |
 | 播放列表 | 保留，作为唯一管理员的元数据管理能力 |
 | 标签、分类、搜索、CRUD | 保持现有体验 |
 | Django Admin | 仅唯一管理员访问 |
 
-数据库约束和启动检查确保最多只有一个 `is_active=True` 且具有管理员权限的用户。首次部署通过一次性管理命令创建管理员；生产环境不提供公开创建用户能力。
+使用独立单例模型标识唯一管理员：
+
+```text
+SiteAdministrator
+- singleton_key        # 固定为 default，主键或唯一
+- user                 # OneToOne users.User
+- created_at
+- updated_at
+```
+
+安全边界由单例与认证策略共同实现，而不是声称普通 User表 `CHECK` 约束能够跨行限制用户数量：
+
+- 自定义认证策略、页面中间件和 DRF Permission只允许 `SiteAdministrator.user` 登录和访问。
+- 一次性管理命令在事务中锁定单例行、绑定超级管理员，并停用其他账户。
+- 注册、创建用户 API以及 Django Admin中的 User新增、激活和提权操作关闭。
+- 启动检查确保单例用户存在、有效且为超级管理员。
+- 保留现有 User创建默认 Channel的信号与外键结构，避免破坏 Media和 Playlist兼容性。
+
+首次部署通过一次性管理命令创建管理员；生产环境不提供公开创建用户能力。
+
+### 16.1 保留 App、关闭能力
+
+首期不得直接从 `INSTALLED_APPS` 删除 RBAC、LTI、SAML、identity_providers或 actions。现有 `files` 迁移依赖 LTI，User模型也直接依赖 RBAC和 MediaPermission。处理顺序固定为：
+
+1. 保留 App、模型和 migrations，确保全新数据库可完整迁移。
+2. 从顶层 URL关闭 LTI、SAML、用户列表、评论、分享和行为入口。
+3. 通过统一单管理员 Feature Policy关闭相关 DRF写 API、Django Admin操作和前端控件。
+4. 关闭这些模块会创建业务数据或外部副作用的信号/定时任务。
+5. 完整依赖审计和数据迁移方案获批前，不删除 App或表。
 
 ## 17. Cookie、密钥与 IAM 安全
 
@@ -722,6 +831,7 @@ stateDiagram-v2
 - 若取消与 MediaConvert 完成竞态，以数据库取消意图为准，不激活输出。
 - 失败或进程重启后只根据重新验证的检查点恢复，不依赖本地临时文件。
 - 所有恢复和指定节点重跑创建新 Attempt，并保留历史记录。
+- MediaConvert返回 `CANCELED` 但本地没有取消意图时，按供应商异常失败处理，不能伪装成管理员取消。
 
 ## 20. 测试策略
 
@@ -742,6 +852,8 @@ flowchart TD
 - SRT/WebVTT 规范化、中英双语 Cue 合并，以及中文字幕、英文字幕或全部字幕缺失的合法降级。
 - HLS URI、路径、文件类型和引用闭包校验。
 - S3 Key 生成、资源版本激活和旧 Attempt 防覆盖。
+- `Media.state` 发布可见性与 `processing_status`、Job状态、cleanup状态互不覆盖，以及 `encoding_status` 兼容投影。
+- MediaConvert `SUBMITTED/PROGRESSING/COMPLETE/CANCELED/ERROR`、`currentPhase`和空百分比映射。
 - 总体进度权重、阶段进度和重跑后进度重置。
 - 日志脱敏、Handoff Grant 和 CloudFront Cookie Policy。
 
@@ -768,6 +880,7 @@ flowchart TD
 - FIFO 排队位置、阶段进度、总体进度和不确定进度条。
 - Cookie 上次上传日期、无 Cookie 警告、认证失败后的 Resume。
 - 视频清晰度、音频播放、字幕切换、无字幕提示和授权续期。
+- 登录后媒体 Cookie Bootstrap、列表 Thumbnail、Poster、WebVTT和 HLS，以及页面图片授权过期后的单次全局恢复。
 - 禁用评论、分享、用户及其他多用户入口。
 - 标签、分类、播放列表和媒体 CRUD 回归。
 
@@ -806,6 +919,25 @@ flowchart LR
 - Cloudflare Tunnel 只暴露页面/API及 CloudFront `/auth/*` 回源路径。
 - Django、Worker 和 MediaConvert 使用独立最小权限身份。
 - 所有 AWS、域名、Cookie、磁盘和队列参数通过环境配置管理。
+
+### 21.1 AWS媒体与旧本地管线分流
+
+仅设置 `DO_NOT_TRANSCODE_VIDEO=True` 不足以关闭当前本地管线：现有 `Media.post_save` 会调用 `media_init()`，随后仍可能读取本地 `media_file`、生成 Sprite或返回原始文件。新增 `storage_backend` 字段，首期值为 `aws`，并在创建时即写入；信号分流如下：
+
+```mermaid
+flowchart TD
+    Save[Media post_save] --> Managed{storage_backend == aws?}
+    Managed -->|是| Skip[跳过 legacy media_init 与通知副作用]
+    Managed -->|否| Legacy{生产允许旧模式?}
+    Legacy -->|否| Reject[拒绝创建本地媒体任务]
+    Legacy -->|是，仅兼容测试| Init[旧 media_init]
+```
+
+- AWS草稿允许 `media_file` 为空，媒体类型由上传会话或探测结果写入。
+- 生产配置拒绝 `storage_backend=local`；旧分支只可在明确兼容测试设置中启用。
+- 旧 Encoding生成、`create_hls`、Sprite、Trim以及原始文件播放回退全部对 AWS媒体短路。
+- 现有 `encoding_status` 由新的 processing状态投影服务维护，不再通过查询本地 Encoding行计算 AWS媒体状态。
+- 删除 AWS媒体时不调用本地 FileField路径删除逻辑，而是创建幂等 S3清理任务。
 
 ## 22. CloudFormation
 
@@ -898,7 +1030,9 @@ flowchart TD
 - S3 不公开，未授权请求无法获取媒体。
 - 签名 Cookie 可签发、续期、403 恢复和退出清除。
 - 评论、分享和多用户入口不可用。
+- RBAC、LTI、SAML、identity_providers和 actions的 App与迁移保持可安装，但公开入口、写操作及副作用被关闭。
 - 本地视频转码链完全禁用。
+- `Media.state` 继续管理发布可见性；AWS处理状态、Job执行状态、清理状态和 MediaConvert供应商状态各自独立且映射经过测试。
 - 新数据库从空白 AWS 模式开始，不读取旧媒体数据。
 
 ## 26. 实施拆分与顺序
