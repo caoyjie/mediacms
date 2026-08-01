@@ -2,7 +2,7 @@
 
 ## 1. 范围
 
-本模块权威定义私有媒体的 CloudFront 签名 Cookie、登录后 Bootstrap、续期、缩略图/poster/WebVTT/HLS 授权和播放器行为。
+本模块权威定义私有媒体的 CloudFront 签名 Cookie、登录后 Bootstrap、续期以及缩略图/poster/WebVTT/HLS 的授权与播放契约。具体前端 Provider、播放器客户端、清晰度偏好和断点续播由 `08` 定义。
 
 ## 2. 为什么使用签名 Cookie
 

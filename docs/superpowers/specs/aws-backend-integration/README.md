@@ -16,11 +16,12 @@ MediaCMS 是唯一业务系统和轻量控制面；浏览器、S3、MediaConvert
 | --- | --- |
 | [01-domain-and-single-admin.md](01-domain-and-single-admin.md) | 领域模型、三套状态、单管理员、现有 App 兼容策略 |
 | [02-aws-infrastructure-and-storage.md](02-aws-infrastructure-and-storage.md) | S3、IAM、MediaConvert、CloudFormation、版本化资源 |
-| [03-browser-upload-and-hls-import.md](03-browser-upload-and-hls-import.md) | 本地文件直传、断点续传、浏览器解包 HLS ZIP、上传进度 |
+| [03-browser-upload-and-hls-import.md](03-browser-upload-and-hls-import.md) | 本地文件/HLS ZIP直传协议、安全约束、服务端恢复证据与上传租约 |
 | [04-media-processing-orchestration.md](04-media-processing-orchestration.md) | 来源检查点、串行队列、原子发布、重试、取消与清理 |
 | [05-youtube-and-subtitles.md](05-youtube-and-subtitles.md) | YouTube、cookies.txt、字幕发现/合并/上传 |
-| [06-cloudfront-playback.md](06-cloudfront-playback.md) | 签名 Cookie Bootstrap、播放器、清晰度、音频与无字幕体验 |
+| [06-cloudfront-playback.md](06-cloudfront-playback.md) | 签名 Cookie Bootstrap、续期与私有媒体播放授权契约 |
 | [07-deployment-and-acceptance.md](07-deployment-and-acceptance.md) | 部署、全新数据库、测试矩阵、上线与旧资源清理 |
+| [08-frontend-experience.md](08-frontend-experience.md) | 添加媒体向导、上传客户端、全局任务中心、进度图标、播放器客户端与断点续播 |
 
 模块之间通过本文定义的公共模型和不变量协作；同一要求只在表中指定的模块内作权威定义。
 
@@ -103,7 +104,10 @@ flowchart LR
     A --> P[06 播放授权]
     O --> P
     Y --> P
-    P --> V[07 部署与验收]
+    P --> F[08 前端体验]
+    U --> F
+    O --> F
+    F --> V[07 部署与验收]
 ```
 
 建议实施顺序为：模型与迁移 → AWS 基础设施 → 上传 → 编排与 MediaConvert → YouTube/字幕 → 播放授权 → 端到端部署验收。
