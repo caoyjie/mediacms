@@ -31,6 +31,8 @@ MediaCMS 是唯一业务系统和轻量控制面；浏览器、S3、MediaConvert
 - 私有 S3 保存上传、原件、HLS、图片和字幕；CloudFront + OAC 是唯一读取出口。
 - 浏览器直传本地视频/音频，或流式解包本地 HLS ZIP 后上传文件树；两者必须可暂停、恢复、刷新后续传和取消。
 - MediaConvert 是新上传视频的唯一转码器；后端禁止本地视频转码和 HLS 打包，只允许探测、字幕处理与必要的单帧截取。
+- MVP 使用固定 `360p/480p/720p/1080p` ABR 梯度和 QVBR；Automated ABR 与 Accelerated Transcoding 仅预留关闭状态的配置开关。
+- MediaConvert 视频/音频 Job Template 必须版本化；数据库提交意图、供应商 Job ID 和 `ClientRequestToken` 共同提供提交幂等。
 - 全系统重任务严格 FIFO 串行，任何时刻只允许一个处理链运行。
 - 媒体通过完整资源版本一次性原子激活，不暴露半成品。
 - 支持无字幕、仅中文、仅英文和中文/英文/双语三轨。
@@ -110,4 +112,5 @@ flowchart LR
 
 - 不迁移 FastAPI、SQLAlchemy、Next.js、Vercel 或第二套业务数据库。
 - MVP 不支持 YouTube 播放列表、加密 HLS/DRM、EventBridge 编排或并发处理。
+- MVP 不启用 Automated ABR、Accelerated Transcoding、逐帧 VMAF/SSIM 质量报告或多 codec 输出。
 - 旧 AWS 资源不在本次自动清理范围；开发测试完成后必须再次取得明确批准。

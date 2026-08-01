@@ -30,11 +30,23 @@ Cloudflare Tunnel 只路由页面/API。Nginx、Django 和容器请求体限制�
 
 - 私有 S3 Bucket（默认 `mediacms-${AWS::AccountId}-us-east-1`）、加密、CORS、Block Public Access 和生命周期规则。
 - MediaConvert Service Role 与最小 Bucket 前缀权限。
+- `mediacms-video-hls-v1` 与 `mediacms-audio-hls-v1` 两个版本化 Job Template。
 - 应用 Role/Policy 或部署环境绑定所需的最小凭证。
 - CloudFront Distribution、OAC、Key Group、公钥及缓存行为。
+- CloudWatch Dashboard、应用自定义任务时长指标和告警。
 - 参数化域名、Bucket 覆盖名、日志/保留期；输出非秘密资源标识。
 
 私钥和 Django 加密密钥通过独立 Secret 注入，不写入模板输出。部署需幂等；删除 Stack 时生产 Bucket 使用 Retain，避免测试脚本误删媒体。
+
+CloudWatch 至少覆盖：
+
+- MediaConvert `JobsErroredCount` 和 `JobsCanceled`。
+- `StandbyTime`、`TranscodingTime`、SD/HD/UHD/音频输出时长与 QVBR 质量统计 Dashboard。
+- `BlackVideoDetected`、`BlackVideoDetectedRatio`、`VideoPaddingInserted` 和对应 Ratio 的质量告警；告警只产生发布后警告，不自动把 Media 标为 failed。
+- Job 长时间等待和长时间转码告警。MediaConvert 的部分指标在 Job 结束时才产生，因此实时超时告警使用 Django reconciler 根据持久化阶段/心跳发布的应用自定义 CloudWatch 指标，不能错误地依赖结束后指标。
+- 通过 Tags 按 `Environment` 和 `TemplateVersion` 分析输出分钟数与成本；成本报表本身由 AWS Billing Cost Allocation Tags 配置启用。
+
+指标名称和产生时机以 [MediaConvert CloudWatch 指标列表](https://docs.aws.amazon.com/mediaconvert/latest/ug/metrics.html) 为准。
 
 ## 4. 全新数据库初始化
 
@@ -71,8 +83,10 @@ Cloudflare Tunnel 只路由页面/API。Nginx、Django 和容器请求体限制�
 
 - Multipart 创建/ListParts/完成/中止与过期续签。
 - MediaConvert 提交、轮询五种状态、取消、COMPLETE 后输出缺失。
+- 固定 ABR/QVBR 梯度、源分辨率裁剪、自动旋转、Job Template 版本和 `ClientRequestToken` 幂等。
 - 私有 S3 + OAC、越权前缀拒绝、生命周期规则。
 - candidate 完整验证和一次事务切换 active version。
+- Job Tags/userMetadata 无敏感字段，CloudWatch 错误、超时、黑屏与 padding 告警可触发。
 
 ### 6.3 前端与端到端
 
@@ -96,6 +110,7 @@ Cloudflare Tunnel 只路由页面/API。Nginx、Django 和容器请求体限制�
 - CloudFormation、空库 migration、初始化命令和配置自检全部成功。
 - 至少完成：本地视频、本地音频、本地 HLS ZIP、YouTube 有/无字幕、Cookie Resume 的端到端验收。
 - 验证多清晰度 HLS、首个有效帧 poster、缩略图、字幕和签名 Cookie 续期。
+- 验证固定 ABR 使用 QVBR、手机视频自动旋转、低分辨率源不放大，Automated ABR 和 Acceleration 保持关闭。
 - 验证任意时刻只有一个重任务；后端大文件不经过 Tunnel；临时磁盘可回收。
 - 安全审计确认 Bucket 私有、IAM 前缀最小化、日志无 Cookie/签名/私钥。
 - 备份并演练 PostgreSQL 恢复；恢复后 SiteAdministrator 和活动版本指针一致。

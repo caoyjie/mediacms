@@ -8,7 +8,7 @@
 
 - 区域固定为 `us-east-1`。
 - S3 Bucket 默认物理名：`mediacms-${AWS::AccountId}-us-east-1`；参数可覆盖，但部署前必须验证全球唯一。
-- 新建私有 S3、MediaConvert Service Role、应用 IAM Role/Policy、CloudFront Distribution、OAC、Key Group 和签名公钥。
+- 新建私有 S3、MediaConvert Service Role、应用 IAM Role/Policy、版本化 Job Template、CloudWatch 告警、CloudFront Distribution、OAC、Key Group 和签名公钥。
 - S3 启用 Block Public Access、默认加密、Multipart 生命周期清理和最小 CORS。
 - CloudFront 仅通过 OAC 读 S3；S3 不提供公共 URL。
 - CloudFormation 输出 Bucket、Distribution ID/Domain、Key Pair ID、MediaConvert Role ARN 和应用所需配置。
@@ -67,18 +67,52 @@ stateDiagram-v2
 
 - 输出自适应 HLS master、各清晰度 variant、音频 rendition、首个有效视频帧封面和缩略图。
 - 预设清晰度按源分辨率裁剪，不放大低分辨率源；所有输出宽高规范为偶数。
-- 编码参数、segment 时长和码率形成版本化模板；Job/Attempt 记录模板版本。
+- MVP 固定使用 H.264、AAC、Apple HLS 和 QVBR；不使用 CBR、Automated ABR 或多 codec 输出。
+- 输入 `VideoSelector.Rotate=AUTO`，使具有受支持旋转元数据的手机 MP4/MOV 生成方向正确的像素输出，而不是依赖播放器旋转。
+- 编码参数、segment 时长和码率形成版本化 Job Template；Job/Attempt 记录模板名和版本。
 - 输出进入候选前缀，验证完成前不进入活动播放路径。
+
+初始固定梯度：
+
+| 输出 | QVBR Level | Max Bitrate |
+| --- | ---: | ---: |
+| 1080p | 8 | 6 Mbps |
+| 720p | 8 | 4 Mbps |
+| 480p | 7 | 1 Mbps |
+| 360p | 7 | 700 Kbps |
+
+- 默认 `SINGLE_PASS_HQ + QVBR`，不设置 `MaxAverageBitrate`。
+- 低于源分辨率或会导致放大的 rendition 不生成；因此实际 master 可以少于四档。
+- 若验收证明质量不足，再新建 `MULTI_PASS_HQ` 高质量模板，不能原地改变既有模板语义。
+- 首版模板名为 `mediacms-video-hls-v1`，Attempt 保存相同的 `template_version=h264-hls-qvbr-v1`。
 
 ### 5.2 音频
 
 - 单个音频文件由 MediaConvert 输出私有音频 HLS。
 - 封面优先级：管理员上传 → 来源图片 → 系统默认音频封面。
 - 不伪造视频分辨率；播放器使用音频模式。
+- 首版模板名为 `mediacms-audio-hls-v1`；输入/输出路径、IAM Role、标签和必要来源差异在提交时覆盖。
 
 ### 5.3 HLS 导入的缩略图
 
 HLS 文件树跳过完整转码。优先使用来源封面；否则后端通过 boto3 读取清单和生成首个有效帧所需的最少分片到受限临时目录，再用 FFmpeg 截取单帧。也可为单个对象签发短期预签名 S3 URL，但不得假设相对分片会自动继承鉴权。加密 HLS（`EXT-X-KEY`）或 DRM 在 MVP 中拒绝。
+
+MediaConvert 的 Frame Capture 不能成为 Job 的唯一输出，必须同时产生普通音视频输出。已经可播放的 HLS 若只为截图调用它，会产生多余转码和费用，因此 MVP 明确不使用 MediaConvert 执行 HLS-only 截图，继续采用上述最小本地回退。
+
+### 5.4 暂不启用的模板能力
+
+- `Automated ABR`：配置开关保留，默认关闭；MVP 的质量菜单和输出数量保持可预测。
+- `AccelerationMode`：保留 `DISABLED/PREFERRED` 配置，MVP 固定 `DISABLED`；后续经格式兼容和成本验收后才能启用 `PREFERRED`。
+- 逐帧 VMAF/SSIM 等质量报告只用于开发样本比较，不加入生产模板。
+
+能力依据：
+
+- [QVBR 配置指南](https://docs.aws.amazon.com/mediaconvert/latest/ug/qvbr-guidelines.html)
+- [自动旋转](https://docs.aws.amazon.com/mediaconvert/latest/ug/automatic-rotation.html)
+- [Job Template](https://docs.aws.amazon.com/mediaconvert/latest/ug/working-with-job-templates.html)
+- [Frame Capture 输出限制](https://docs.aws.amazon.com/mediaconvert/latest/ug/file-group-with-frame-capture-output.html)
+- [Automated ABR 及其限制](https://docs.aws.amazon.com/mediaconvert/latest/ug/auto-abr.html)
+- [Accelerated Transcoding](https://docs.aws.amazon.com/mediaconvert/latest/ug/setting-up-accelerated-transcoding.html)
 
 ## 6. 版本化资源
 
