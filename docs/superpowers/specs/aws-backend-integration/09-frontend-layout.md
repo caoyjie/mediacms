@@ -100,6 +100,11 @@ Categories
 - 选中文件后立即显示名称、大小、类型和恢复能力。
 - 最终按钮为 `Create task`。创建后进入全局严格单任务队列，页面可离开。
 - 草稿可恢复；文件权限失效时显示 `Select the same file to continue`。
+- Stepper使用语义化有序列表，当前步骤标记 `aria-current="step"`；每一步使用原生表单语义。
+- 校验失败时在步骤顶部显示可聚焦的Error Summary，各错误链接到对应字段，并把焦点移到Summary。
+- `Create task`提交后立即禁用并显示pending；请求携带Idempotency-Key，防止双击创建重复任务。
+- 返回上一步保留已录入字段；切换Source会清除来源专属字段，必须先确认。
+- 离开提醒只用于未保存元数据或尚未创建的草稿。跨页面上传恢复文案使用 `Upload will resume on the next page`。
 
 ## 4. Task Drawer
 
@@ -135,6 +140,9 @@ Categories
 - 失败任务显示首要恢复动作，如 `Upload cookies`、`Select file`、`Retry` 或 `Resume`。
 - `Pause`、`Cancel` 等操作严格来自后端 `allowed_actions`。
 - 关闭抽屉不终止任务。
+- 桌面端是非模态 complementary panel，不使背景页面失效；打开后焦点移到抽屉标题，关闭后返回Header任务按钮。
+- 移动端全屏是modal dialog：背景inert，Tab/Shift+Tab限制在抽屉内，Escape关闭，并具有可见Close按钮和可访问名称。
+- 删除、取消等不可逆确认使用alertdialog，初始焦点放在非破坏性操作。
 
 ## 5. Task center
 
@@ -151,6 +159,7 @@ Categories
 - 可折叠 `Insights` 提供最近 30 天的完成率、平均处理时长、来源分布、每日完成/失败趋势和处理时长分布。
 - 趋势使用 Chart.js；KPI、比例条优先使用 React/SCSS；每个 canvas 图表必须有等价文本或表格。
 - Attempt 时间线使用语义化 HTML/CSS，不引入额外时间线库。
+- `@zip.js/zip.js`只在选择HLS package后动态加载；Chart.js只在展开Insights后动态加载。长期历史继续服务端分页，首期不引入虚拟列表。
 
 ## 6. 媒体列表与编辑页
 
@@ -220,6 +229,10 @@ Categories
 - capabilities 不兼容或 AWS 模式不可用时禁用 `Create task`，不得回退到本地转码。
 - 新控件支持键盘操作、焦点恢复和屏幕阅读器；状态不能只靠颜色表达。
 - `prefers-reduced-motion` 下以静态阶段图标和文字替代旋转动画。
+- 可计算的上传/文件进度使用原生`progress`或带`aria-valuenow`的progressbar；AWS无法提供可靠百分比时使用indeterminate且省略`aria-valuenow`，不得为了视觉连续性伪造数值。
+- `aria-valuetext`包含阶段和可用数值；独立`aria-live="polite"`只播报阶段变化、每10%进度或action required，不播报每个XHR事件。
+- Task标题、YouTube metadata和安全错误必须作为文本节点渲染，禁止使用`dangerouslySetInnerHTML`。
+- MediaTaskProvider、Add media、Task Center和播放器整合区分别设置错误边界；单个新模块异常不得使现有Header、Sidebar或媒体页面白屏。
 
 ## 10. 响应式规则
 
@@ -236,6 +249,7 @@ Categories
 - 新依赖限制为 `@zip.js/zip.js`、`idb` 和 `Chart.js`；播放器继续使用现有 Video.js。
 - 新文案集中在英语文案模块，避免散落硬编码并保留未来国际化边界。
 - capabilities、TaskView、`allowed_actions` 和 asset version 是前端能力与状态的唯一依据。
+- 主站`react`、`react-dom`与对应类型保持17.x；播放器独立保持19.x。共享模块不得依赖React，构建检查必须阻止跨Root组件导入。
 
 必须验证：
 
@@ -247,3 +261,24 @@ Categories
 6. 所有新增可见文案均为英语。
 7. 禁用模块入口不可见，写 API 被拒绝。
 8. 桌面、移动、键盘、屏幕阅读器和 reduced-motion 行为符合本模块要求。
+
+## 12. 实施计划非阻塞优化清单
+
+以下项目必须带入实施计划，但不作为MVP功能验收的阻塞条件；不得因此推迟核心上传、处理和播放闭环：
+
+- 任务列表使用稳定尺寸的skeleton，避免轮询和首次加载造成布局跳动。
+- URL同步的搜索输入增加debounce；过滤器变化立即作废旧请求。
+- Header任务图标提供完整accessible name，数量超过99显示`99+`。
+- Toast限制同时可见数量，并按任务合并重复事件。
+- 浏览器Notification权限只在管理员点击开启时请求。
+- 在`prefers-reduced-motion`之外补充`forced-colors`和高对比度样式。
+- 使用PerformanceObserver记录Add media首次可交互、Task Center渲染和播放器启动耗时；事件不得包含媒体标题、URL、S3 Key或签名信息。
+- 将主站Browserslist与“最近两个主要版本”的已批准浏览器基线统一，并记录构建体积和polyfill变化。
+
+## 13. 最佳实践依据
+
+- [W3C Dialog Modal Pattern](https://www.w3.org/WAI/ARIA/apg/patterns/dialog-modal/)：模态抽屉的焦点、键盘和关闭行为。
+- [W3C Progressbar Range Properties](https://www.w3.org/WAI/ARIA/apg/practices/range-related-properties/) 与 [ARIA25](https://www.w3.org/WAI/WCAG21/Techniques/aria/ARIA25)：确定/不确定进度和live region。
+- [React External Store Guidance](https://react.dev/reference/react/useSyncExternalStore)：外部可变数据的稳定订阅边界；主站React 17采用等价的Provider订阅模式，不调用React 18 API。
+- [Back/forward cache guidance](https://web.dev/articles/bfcache)：使用`pagehide/pageshow`并避免`unload`。
+- [File System Access guidance](https://developer.chrome.com/docs/capabilities/web-apis/file-system-access)：文件权限请求必须由用户操作触发。

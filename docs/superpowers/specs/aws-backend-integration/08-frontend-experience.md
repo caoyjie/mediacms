@@ -18,6 +18,7 @@
 - 新增 TypeScript React 组件替换添加媒体页对 Fine Uploader 的依赖。
 - 在根 Provider 中增加媒体授权和任务 Provider；普通页面导航重新加载后，从服务端和 IndexedDB 重建任务并自动续传。
 - `frontend-tools/video-js` 继续作为独立 React 19/Video.js 8 构建，通过 API 和 Cookie 与主站协作，不跨 React Root 共享 Context。
+- 主站运行时和类型依赖保持 React 17 对齐；播放器独立保持 React 19。两个构建不得互相导入 React 组件、Hook 或 Context，只能共享不依赖 React 的 TypeScript 类型、JSON Schema 和纯工具。
 - 不建立第二个媒体管理 SPA，不迁移现有列表和编辑页。
 - 添加媒体页停止加载 Fine Uploader 5.13；首期不删除仓库库文件，先审计其他引用。
 
@@ -53,6 +54,9 @@ flowchart TB
 - 协调服务端唯一上传租约，并使用 Web Locks/BroadcastChannel 防止同一浏览器多个标签页竞争。
 - 协调 IndexedDB 恢复、页面刷新对账和任务抽屉。
 - Provider 不持有 File 大对象；文件句柄/指纹和上传恢复数据由持久化层管理。
+- UploadEngine 不是 React 可变全局 Store。Provider 以稳定订阅接收 Engine 事件并 dispatch 到 reducer；卸载时解除订阅并中止属于当前文档的未完成请求。
+- XHR进度按 animation frame 或100–250ms合并后再进入React，禁止每个原始progress事件触发全局Context更新。
+- active task、task summary和drawer visibility使用独立Context或稳定selector，避免一个Part进度导致整个Header、Sidebar和页面树重渲染。
 
 ### 3.3 AddMediaWizard
 
@@ -173,6 +177,10 @@ stateDiagram-v2
 - 刷新恢复先查询 Django/ListParts/Object 验证，再更新 IndexedDB。
 - 普通页面导航会中止当前XHR；已完成Part保留，未完成Part在新页面重传。新页面初始化Provider后重新取得/接管租约并自动续传，因此不承诺单个XHR跨页面存活。
 - 关闭浏览器、失去文件句柄权限或换设备后，任务保持 `action_required`；重新授权同一文件后继续。
+- 界面不得把跨MediaCMS页面导航描述为后台XHR持续运行；标准文案为 `Upload will resume on the next page`。
+- 恢复能力显示为 `Ready to resume`、`File selection required`、`Verifying uploaded parts` 或 `Cannot resume`，不得只显示模糊的支持/不支持。
+- IndexedDB必须具有显式schema version、逐版本迁移和事务失败处理；容量不足、隐私模式或持久化申请失败不得破坏服务端会话。
+- File System Access重新授权只能由管理员操作触发；初始化时不得自动弹出文件权限请求。可尝试持久存储，但Django/S3证据始终覆盖本地状态。
 
 ## 7. 全局任务中心与长期历史
 
@@ -300,6 +308,8 @@ API 错误使用稳定 `error_code + safe_message + allowed_actions`，前端禁
 - 断点阈值、完成判定、版本替换和旧会话冲突。
 - 自适应轮询退避、前后台切换、Leader选举和旧revision丢弃。
 - 能力协商、未知状态兜底和Chart.js文字/数据表替代内容。
+- Provider订阅清理、进度事件合并、Context渲染隔离和React 17类型边界。
+- IndexedDB schema迁移、quota/事务失败、四级恢复能力和文件权限重新授权。
 
 ### 12.2 API契约
 
@@ -324,6 +334,8 @@ API 错误使用稳定 `error_code + safe_message + allowed_actions`，前端禁
 - 视频/音频断点、`?t=`优先、已完成重播和跨设备冲突。
 - 元数据并发冲突、字幕/封面原子换版、异步删除和清理重试。
 - 站内通知、可选浏览器通知、能力不兼容阻止上传和安全降级。
+- `pagehide/pageshow`、bfcache恢复、前后台切换和无`unload`监听器。
+- Task Drawer桌面非模态、移动模态的焦点进入、循环、Escape关闭和焦点恢复。
 
 ### 12.4 非功能
 
@@ -344,6 +356,8 @@ MVP不使用SSE。`MediaTaskProvider`采用自适应轮询：
 - 无活动或待处理任务时停止轮询。
 
 同一浏览器通过BroadcastChannel与Web Locks选出一个轮询Leader，其他标签页接收状态广播；Leader消失后重新选举。后端读接口仍必须容忍重复轮询，Leader机制只优化流量，不保证正确性。
+
+页面生命周期固定使用 `visibilitychange` 降频和保存、`pagehide` 释放页面请求、`pageshow` 重新对账。`pageshow.persisted=true` 时必须视为bfcache恢复并立即刷新任务、租约和授权状态。`online/offline` 只控制提示和触发探测，不能证明Django、S3或AWS可用。禁止注册 `unload`；只有确有未保存表单时才临时使用 `beforeunload`。
 
 前端只消费 `04` 定义的TaskView。未知display status、stage或error code使用安全兜底文案；只有较新revision可覆盖当前状态。Action按钮严格依据allowed_actions，调用统一Action API时携带If-Match和Idempotency-Key。
 
@@ -463,6 +477,7 @@ GET /api/media-system/capabilities
 - 来源卡和文件限制由响应控制；后端仍重复执行安全验证。
 - 能力响应不得包含密钥、Bucket、Role ARN、S3 Key或内部诊断。
 - 部署顺序为兼容后端、前端、开启AWS模式。
+- capabilities和TaskView在进入Provider前必须经过窄运行时解析器；未知枚举显示 `Unknown status`，旧revision不得覆盖新状态。首期手写解析器，不为此单独引入schema依赖。
 
 ## 18. 前后端接口汇总
 
