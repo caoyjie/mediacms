@@ -32,6 +32,19 @@
 - AWS dev/prod资源、凭证、Cookie和清理范围必须隔离。
 - 新前端资源和文案全部使用英语。
 - Cloudflare配置前继续计划1–5以及计划6的默认CloudFront域名验证；不得把等待控制台配置当作开发阻塞。
+- 任何会联网下载大量依赖、工具、包、容器镜像或浏览器运行时的操作，Codex只提供完整命令、预期下载内容、磁盘影响和验证命令，等待管理员手动执行；不得自行执行。已安装依赖的离线检查、lint和测试不受此限制。
+- AWS部署命令显式使用`aws --profile default --region us-east-1`。资源创建、更新和删除只通过CloudFormation Stack/Change Set执行；不得用`aws s3api create-bucket`、`aws iam create-*`、`aws cloudfront create-*`或`aws mediaconvert create-job-template`绕过Stack。
+- CloudFormation变更先执行`cfn-lint`和`aws cloudformation validate-template`，再创建并审阅Change Set；IAM资源必须显式使用`CAPABILITY_NAMED_IAM`。删除Stack、清空Bucket和旧资源清理仍需单独批准。
+- AWS CLI的`default` profile只用于管理员部署与只读验收，不复制到镜像或容器。生产运行时凭证由AWS infrastructure计划定义的独立最小权限身份提供。
+
+## AWS参考实现边界
+
+参考文件为`/home/caoyujie/projects/cyj/media-platform/infra/aws/media-platform.yaml`。只迁移经过MediaCMS需求复核的结构，不复制物理名称或既有资源引用：
+
+- 复用设计模式：S3 Block Public Access/加密/版本控制/Multipart生命周期、CloudFront OAC、Public Key/Key Group双钥轮换、credentialed CORS response policy、ACM可外部DNS验证、MediaConvert Service Role、CloudFront SourceArn约束的Bucket Policy以及非秘密Outputs。
+- 必须改造：Bucket默认名改为`mediacms-${AWS::AccountId}-us-east-1`；Tags改为`Project=mediacms`并包含Environment；来源前缀、CORS应用域名、生命周期、CloudWatch和MediaConvert Job Templates按本项目规范参数化。
+- 禁止照搬：Vercel custom origin/default behavior、`media-platform-*`名称、Route 53自动记录（DNS由Cloudflare管理）、现有Bucket/Distribution/Role/Public Key以及任何旧AWS资源。
+- 参考模板中的IAM User、AccessKey和Secrets Manager静态凭证组合不自动视为MediaCMS最终方案。AWS infrastructure计划必须比较生产宿主机可行的最小权限运行时凭证方案，并确保CloudFormation输出不包含SecretAccessKey。
 
 ## 当前执行入口
 

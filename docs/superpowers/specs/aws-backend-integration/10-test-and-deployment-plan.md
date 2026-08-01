@@ -66,6 +66,10 @@ Docker socket的权威配置为`root:docker`、`0660`，当前用户属于`docke
 
 GHCR发布前仍需执行一次无敏感输出的实际验证：登录`ghcr.io`、推送临时或候选SHA标签、按digest拉取并比较digest。生产使用独立的只读`read:packages`凭证，不复制Arch的可写GitHub token。
 
+联网依赖安装遵循人工执行门禁：当操作需要安装系统工具、同步完整Python/Node依赖、下载浏览器运行时、拉取基础/服务镜像或产生其他大量网络下载时，开发代理只输出可复制命令、预计对象/磁盘占用和执行后验证命令，由管理员手动运行并回传结果。不得把安装命令隐藏在测试、Makefile或启动脚本中自动执行。已存在依赖的版本检查、lint、测试和小型只读API探测可直接运行。
+
+AWS基础设施统一由AWS CLI的`default` profile在`us-east-1`操作CloudFormation。创建/更新先lint和validate，再生成Change Set供审阅，最后执行；资源不通过零散AWS create命令旁路Stack。运行时应用不得挂载或复制`~/.aws`和部署profile。部署命令、Change Set摘要和Stack Outputs必须脱敏，删除Stack及Retain资源另行取得明确批准。
+
 ## 3. 测试分层
 
 ```mermaid
