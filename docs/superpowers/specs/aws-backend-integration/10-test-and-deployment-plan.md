@@ -48,6 +48,24 @@
 
 两台报告的可选网络测试均被跳过。进入AWS集成前，Arch必须验证浏览器到S3、CloudFront、AWS API和GHCR push；生产必须验证GHCR pull、S3 HEAD/PUT、MediaConvert/CloudWatch API、Cloudflare Tunnel以及一个短YouTube metadata/download。网络测试失败属于部署阻塞，不以短视频规避不可达问题。
 
+### 2.3 已验证的开发工具基线
+
+截至2026-08-02，Arch测试机已验证以下工具可用：
+
+| 能力 | 已验证状态 | 用途与门禁 |
+| --- | --- | --- |
+| `shellcheck 0.11.0` | 可执行 | 所有新增Shell脚本必须通过；项目定向禁用规则需在脚本内说明原因 |
+| `shfmt 3.13.1` | 可执行 | 新增Shell脚本使用仓库统一格式，CI以检查模式运行 |
+| `cfn-lint 1.53.3` | 由`uv tool`安装且可执行 | 所有CloudFormation模板在部署前必须通过lint |
+| `gh 2.96.0` | GitHub API、SSH远程和`caoyjie/mediacms`访问成功 | 用于仓库、Actions和GHCR发布操作 |
+| GitHub认证 | Classic token含`repo`与`write:packages` | Arch可构建和推送GHCR；不得把token写入环境报告、日志或仓库 |
+| AWS CLI/STS | 身份查询成功 | 只证明当前凭证有效；每项S3、MediaConvert、CloudFormation和CloudWatch权限仍按最小权限集成测试 |
+| Docker Engine 29.6.2 | Server可访问，Compose 5.3.1可用 | 本地容器开发阻塞已解除 |
+
+Docker socket的权威配置为`root:docker`、`0660`，当前用户属于`docker`组且`docker info`可访问14 CPU/30.84 GiB测试机Engine。不得以`chmod 666`、rootless旁路或额外不受控daemon解决权限问题。后续若再次失败，先检查`docker.socket`的`SocketGroup=docker`、活动组和systemd状态，再恢复标准socket所有权。
+
+GHCR发布前仍需执行一次无敏感输出的实际验证：登录`ghcr.io`、推送临时或候选SHA标签、按digest拉取并比较digest。生产使用独立的只读`read:packages`凭证，不复制Arch的可写GitHub token。
+
 ## 3. 测试分层
 
 ```mermaid
@@ -168,6 +186,31 @@ Celery固定`concurrency=1`、`prefetch_multiplier=1`、`worker_max_tasks_per_ch
 - Web不得以root运行；Worker仅对精确临时/日志目录可写。逐服务验证`no-new-privileges`、`cap_drop: ALL`和只读root filesystem；确需写入的路径使用命名volume/tmpfs并记录例外。
 - 镜像扫描确认不含`.env`、cookies.txt、AWS credential、CloudFront私钥或本地媒体。
 
+### 7.1 Cloudflare外部配置门
+
+Cloudflare控制台配置不是领域模型、上传、队列、MediaConvert、前端组件或默认CloudFront域名集成的前置条件。它是自定义域名、跨子域签名Cookie和生产Tunnel端到端测试的外部配置门。配置门开启前继续所有不依赖最终域名的开发和测试，不以等待控制台配置暂停项目。
+
+生产采用同一可注册父域下的两个主机名：
+
+```text
+app.<base-domain>    -> Cloudflare Tunnel -> 127.0.0.1:<web-port>
+media.<base-domain>  -> CloudFront Distribution
+```
+
+实际父域、应用子域和媒体子域由管理员在部署dev自定义域名前提供，并参数化进入CloudFormation和Django配置，禁止硬编码示例域名。外部配置按以下顺序执行：
+
+1. CloudFormation在`us-east-1`申请媒体域名ACM证书并输出验证CNAME。
+2. 管理员在Cloudflare DNS添加ACM验证CNAME，设置为`DNS only`并关闭该记录的CNAME flattening；记录长期保留用于自动续期。
+3. 证书签发后创建或更新CloudFront Distribution，再添加`media` CNAME指向CloudFront域名。MVP默认`DNS only`，使CloudFront直接负责Range、缓存、CORS和签名Cookie；不得在未完成专项验证前增加Cloudflare双层代理或缓存。
+4. Web容器内部健康通过后，管理员在现有Tunnel新增或切换`app` Public Hostname到明确loopback端口。切换前备份现有ingress，并确认不会覆盖共享Tunnel的其他hostname。
+5. 运行外部HTTPS、CSRF、Secure Cookie、Cookie Domain/SameSite、CORS、缩略图、poster、WebVTT和HLS端到端验收。
+
+MVP不要求Cloudflare Access、WAF自定义规则、Cache Rules、邮件或后台Push。Django唯一管理员是应用认证边界；Cloudflare Access作为以后可选的第二道访问控制，不进入首期依赖。
+
+配置门开启前可完成：模型和迁移、任务/检查点/资源版本、S3 Multipart、HLS ZIP、FIFO/reconciler、MediaConvert模板与编排、YouTube/字幕/cleanup、前端及mock/契约测试、默认CloudFront域名验证、CloudFormation lint、Compose和GHCR候选镜像。
+
+以下验收明确等待配置门：ACM签发、自定义CloudFront媒体域名、登录后跨子域Cookie Bootstrap、Cookie过期后页面资源恢复、最终域名下的poster/WebVTT/HLS、Tunnel公网访问、生产式CSRF/Secure Cookie/CORS，以及移动端真实HTTPS E2E。
+
 ## 8. 维护、备份与定向清理
 
 ```mermaid
@@ -231,8 +274,8 @@ flowchart TD
 1. **Phase 0资源治理：** 完成脱敏盘点、保留/迁移/删除清单、备份抽检、网络预检和端口确认，并达到分阶段生产硬门槛。
 2. **Phase 1本地基础：** 全新DB、单管理员、领域模型、FIFO、Multipart、授权、Add Media、Task Center；单元/契约/Compose通过。
 3. **Phase 2 AWS媒体：** 短视频、720p、音频、HLS ZIP、视觉资源、字幕；直传、QVBR、原子激活和清理通过。
-4. **Phase 3 YouTube：** 公开短视频、英文/无字幕、可选Cookie失败Resume；临时文件与磁盘限制通过。
-5. **Phase 4播放与移动：** 质量、三轨、Cookie续期、断点、版本切换和真实移动设备通过。
+4. **Phase 3 YouTube：** 公开短视频、英文/无字幕、可选Cookie失败Resume；临时文件与磁盘限制通过。与此并行收集实际父域和两个子域，并准备Cloudflare外部配置门。
+5. **Phase 4播放与移动：** 先在默认CloudFront域名完成不依赖跨子域Cookie的播放验证；开启Cloudflare外部配置门后，再完成质量、三轨、Cookie续期、断点、版本切换和真实移动设备HTTPS验收。
 6. **Phase 5故障恢复：** Web/Worker/Redis重启与Redis清空重建、URL/Cookie过期、AWS失败、S3不一致、cleanup与低磁盘；检查点、队列重建、幂等和active保护通过。
 7. **Phase 6候选镜像：** 完整测试、GHCR SHA/digest、使用同一镜像在Arch复验、记录版本清单。
 8. **Phase 7生产：** 维护、pull、全新DB、Tunnel、最短冒烟、60分钟观察；禁止压力与构建。
@@ -257,3 +300,6 @@ flowchart TD
 - [Celery configuration](https://docs.celeryq.dev/en/stable/userguide/configuration.html)：prefetch与`worker_max_memory_per_child`的单位和任务结束后替换语义。
 - [PostgreSQL resource consumption](https://www.postgresql.org/docs/current/runtime-config-resource.html)：`shared_buffers`、`work_mem`等内存参数必须结合容器上限和并发实测。
 - [GitHub Container Registry](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry)：生产按digest拉取不可变镜像。
+- [Cloudflare Tunnel routing](https://developers.cloudflare.com/tunnel/routing/)：Public Hostname将应用hostname映射到本地服务。
+- [Cloudflare proxy limitations](https://developers.cloudflare.com/dns/proxy-status/limitations/)：指向其他CDN的CNAME代理存在限制，因此MVP媒体域名默认DNS only。
+- [ACM DNS validation](https://docs.aws.amazon.com/acm/latest/userguide/dns-validation.html)：验证CNAME由DNS提供商托管并保留用于证书自动续期。

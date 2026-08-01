@@ -26,6 +26,8 @@ Cloudflare Tunnel 只路由页面/API。Nginx、Django 和容器请求体限制�
 
 首期保留现有镜像内的 Supervisor + Nginx + Gunicorn 结构，避免为移除 Nginx 重写入口。Tunnel 只连接宿主机 loopback 映射端口，Nginx 仅代理轻量页面/API。Nginx、Supervisor 和 Gunicorn 的内存都计入 Web 容器上限。
 
+应用和媒体使用同一可注册父域下的独立子域，例如`app.<base-domain>`与`media.<base-domain>`。实际名称必须由部署参数提供。Cloudflare控制台只承担应用Tunnel hostname与DNS记录；媒体域名MVP以`DNS only`直接指向CloudFront，不将S3、MediaConvert或CloudFront流量送入Tunnel。详细外部配置门和执行时机见`10-test-and-deployment-plan.md`。
+
 ## 3. CloudFormation
 
 模板创建 MediaCMS 独立资源：
@@ -110,6 +112,7 @@ CloudWatch 至少覆盖：
 ## 7. 上线门槛
 
 - CloudFormation、空库 migration、初始化命令和配置自检全部成功。
+- ACM验证CNAME、CloudFront媒体CNAME和Tunnel应用hostname按外部配置门完成；无Cloudflare Access、WAF或Cache Rules依赖。
 - 至少完成：本地视频、本地音频、本地 HLS ZIP、YouTube 有/无字幕、Cookie Resume 的端到端验收。
 - 验证多清晰度 HLS、首个有效帧 poster、缩略图、字幕和签名 Cookie 续期。
 - 验证固定 ABR 使用 QVBR、手机视频自动旋转、低分辨率源不放大，Automated ABR 和 Acceleration 保持关闭。

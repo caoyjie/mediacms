@@ -5,7 +5,7 @@ set -u
 MEDIACMS_RUN_NETWORK_TEST=0
 
 usage() {
-    cat <<'EOF'
+	cat <<'EOF'
 Usage: probe_ubuntu_production_environment.sh [--network] [--help]
 
 Collects a read-only Ubuntu production-environment report from the current
@@ -20,20 +20,27 @@ EOF
 }
 
 while (($#)); do
-    case "$1" in
-        --network) MEDIACMS_RUN_NETWORK_TEST=1 ;;
-        --help|-h) usage; exit 0 ;;
-        *) printf 'Unknown option: %s\n' "$1" >&2; usage >&2; exit 2 ;;
-    esac
-    shift
+	case "$1" in
+	--network) MEDIACMS_RUN_NETWORK_TEST=1 ;;
+	--help | -h)
+		usage
+		exit 0
+		;;
+	*)
+		printf 'Unknown option: %s\n' "$1" >&2
+		usage >&2
+		exit 2
+		;;
+	esac
+	shift
 done
 
 section() {
-    printf '\n=== %s ===\n' "$1"
+	printf '\n=== %s ===\n' "$1"
 }
 
 has_command() {
-    command -v "$1" >/dev/null 2>&1
+	command -v "$1" >/dev/null 2>&1
 }
 
 section 'Ubuntu production environment'
@@ -86,11 +93,11 @@ yt-dlp --version 2>/dev/null || true
 
 section 'Ubuntu packages'
 if has_command dpkg-query; then
-    dpkg-query -W -f='${Package} ${Version}\n' \
-        docker-ce docker.io docker-compose-plugin postgresql redis-server \
-        python3 nodejs ffmpeg awscli cloudflared 2>&1 || true
+	dpkg-query -W -f='${Package} ${Version}\n' \
+		docker-ce docker.io docker-compose-plugin postgresql redis-server \
+		python3 nodejs ffmpeg awscli cloudflared 2>&1 || true
 else
-    printf 'dpkg-query is unavailable.\n'
+	printf 'dpkg-query is unavailable.\n'
 fi
 
 section 'Container capacity'
@@ -99,11 +106,11 @@ docker system df 2>&1 || true
 
 section 'Relevant services'
 if has_command systemctl; then
-    systemctl --no-pager --type=service --state=running 2>/dev/null | grep -E 'docker|containerd|postgres|redis|celery|gunicorn|nginx|cloudflared' || true
-    printf 'System state: '
-    systemctl is-system-running 2>/dev/null || true
+	systemctl --no-pager --type=service --state=running 2>/dev/null | grep -E 'docker|containerd|postgres|redis|celery|gunicorn|nginx|cloudflared' || true
+	printf 'System state: '
+	systemctl is-system-running 2>/dev/null || true
 else
-    printf 'systemctl is unavailable.\n'
+	printf 'systemctl is unavailable.\n'
 fi
 
 section 'Listening service ports'
@@ -121,29 +128,29 @@ printf 'XDG_SESSION_TYPE=%s\n' "${XDG_SESSION_TYPE:-not-set}"
 section 'MediaCMS repository'
 printf 'Working directory: %s\n' "$PWD"
 if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-    git status --short --branch
-    git log -1 --oneline
-    du -sh . 2>/dev/null || true
-    du -sh frontend frontend-tools static media 2>/dev/null || true
+	git status --short --branch
+	git log -1 --oneline
+	du -sh . 2>/dev/null || true
+	du -sh frontend frontend-tools static media 2>/dev/null || true
 else
-    printf 'The current directory is not a Git worktree.\n'
+	printf 'The current directory is not a Git worktree.\n'
 fi
 
 section 'Compose services'
 if [[ -f compose.yml || -f compose.yaml || -f docker-compose.yml || -f docker-compose.yaml ]]; then
-    docker compose config --services 2>&1 || true
-    docker compose images 2>&1 || true
+	docker compose config --services 2>&1 || true
+	docker compose images 2>&1 || true
 else
-    printf 'No Compose file exists in the current directory.\n'
+	printf 'No Compose file exists in the current directory.\n'
 fi
 
 section 'Optional network test'
 if ((MEDIACMS_RUN_NETWORK_TEST)); then
-    curl --fail --location --output /dev/null \
-        --write-out 'HTTP=%{http_code} DNS=%{time_namelookup}s Connect=%{time_connect}s Start=%{time_starttransfer}s Total=%{time_total}s Speed=%{speed_download}B/s\n' \
-        'https://speed.cloudflare.com/__down?bytes=10000000' || true
+	curl --fail --location --output /dev/null \
+		--write-out 'HTTP=%{http_code} DNS=%{time_namelookup}s Connect=%{time_connect}s Start=%{time_starttransfer}s Total=%{time_total}s Speed=%{speed_download}B/s\n' \
+		'https://speed.cloudflare.com/__down?bytes=10000000' || true
 else
-    printf 'Skipped. Run again with --network to download a 10 MB test file.\n'
+	printf 'Skipped. Run again with --network to download a 10 MB test file.\n'
 fi
 
 section 'Privacy reminder'
