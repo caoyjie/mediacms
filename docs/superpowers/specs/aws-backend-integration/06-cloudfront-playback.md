@@ -59,7 +59,33 @@ sequenceDiagram
 
 Media 列表、详情、编辑和播放器均从同一活动资源 API 获得稳定路径。删除、替换封面、增删字幕和重新处理沿用现有操作入口，但写操作创建候选版本并原子切换。后端不能向前端暴露 candidate 或物理 Bucket 名作为业务契约。
 
-## 8. 必测场景
+## 8. 不可变资源 URL 与缓存
+
+活动资源 URL 必须包含 `media_id/asset_version_id`，例如：
+
+```text
+/media/{media_id}/{asset_version_id}/master.m3u8
+/media/{media_id}/{asset_version_id}/poster.jpg
+/media/{media_id}/{asset_version_id}/thumb.jpg
+/media/{media_id}/{asset_version_id}/subtitles/zh.vtt
+```
+
+- 激活后不原地覆盖对象，资源可使用长缓存和 `immutable`。
+- Media API 通过 ETag/短缓存返回最新 active version；版本变化自然产生新资源 URL，不依赖 invalidation。
+- 正在播放的旧版本不强制切换；已打开未播放页面可提示刷新。
+- retired版本至少保留签名Cookie有效期、播放会话宽限期和清理安全窗口。
+- 字幕、poster和thumbnail修改同样创建新资源版本。
+- CloudFront invalidation只用于紧急下架，不参与普通发布事务。
+
+## 9. 浏览器凭证与 CORS
+
+- Django API使用Session Cookie + CSRF，所有写请求只允许唯一管理员。
+- S3预签名PUT不携带Django、CSRF或CloudFront Cookie；CORS精确允许MediaCMS Origin、所需PUT/HEAD，并暴露ETag/校验头。
+- CloudFront精确允许页面Origin并允许凭证；HLS、图片和WebVTT携带HttpOnly签名Cookie。
+- 不使用带凭证的通配Origin，不把预签名URL写入日志或历史。
+- 播放器只接收稳定CloudFront URL，不接收S3 Key或预签名读取URL。
+
+## 10. 必测场景
 
 - 登录后首次进入媒体列表即可显示缩略图，无需先点击播放。
 - 详情 poster、WebVTT 和 HLS 均通过同一 Cookie 授权。
@@ -67,3 +93,5 @@ Media 列表、详情、编辑和播放器均从同一活动资源 API 获得稳
 - Cookie 过期后并发图片 403 只刷新一次，页面内图片恢复。
 - 登出清除 Cookie；非管理员即使已登录也不能 Bootstrap。
 - 三轨、单轨、无字幕、多个清晰度和单音频 UI 均符合预期。
+- active version切换后新URL命中正确对象，旧播放会话在保留期内不中断。
+- Django、S3和CloudFront三类请求只携带各自需要的凭证，真实浏览器CORS可用且无秘密泄漏。

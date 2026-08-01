@@ -298,6 +298,8 @@ API 错误使用稳定 `error_code + safe_message + allowed_actions`，前端禁
 - 文件指纹、句柄恢复、HLS路径/压缩限制。
 - 进度聚合、旋转图标状态和减少动画。
 - 断点阈值、完成判定、版本替换和旧会话冲突。
+- 自适应轮询退避、前后台切换、Leader选举和旧revision丢弃。
+- 能力协商、未知状态兜底和Chart.js文字/数据表替代内容。
 
 ### 12.2 API契约
 
@@ -306,6 +308,8 @@ API 错误使用稳定 `error_code + safe_message + allowed_actions`，前端禁
 - Cookie状态、上传和Resume。
 - CloudFront Bootstrap/续期。
 - PlaybackProgress查询、写入、完成和版本替换。
+- TaskView投影、进度配置、Action幂等和Media revision冲突。
+- 历史游标分页、服务端筛选、每日汇总和已删除Media快照。
 
 ### 12.3 浏览器端到端
 
@@ -318,6 +322,8 @@ API 错误使用稳定 `error_code + safe_message + allowed_actions`，前端禁
 - Cookie过期后缩略图、poster、WebVTT和HLS恢复。
 - 清晰度Auto/手动记忆、字幕三轨/单轨/无字幕。
 - 视频/音频断点、`?t=`优先、已完成重播和跨设备冲突。
+- 元数据并发冲突、字幕/封面原子换版、异步删除和清理重试。
+- 站内通知、可选浏览器通知、能力不兼容阻止上传和安全降级。
 
 ### 12.4 非功能
 
@@ -325,3 +331,154 @@ API 错误使用稳定 `error_code + safe_message + allowed_actions`，前端禁
 - 键盘可操作向导、抽屉、恢复提示和播放器菜单。
 - 进度条具备可访问数值与文本；窄屏抽屉为全屏面板。
 - 真实浏览器连接测试S3 Multipart、CORS、ETag和CloudFront Cookie；Mock不能代替该验收。
+
+## 13. 自适应轮询与多标签页
+
+MVP不使用SSE。`MediaTaskProvider`采用自适应轮询：
+
+- 上传中由本地事件实时更新，每5秒与后端对账。
+- 排队、处理、发布和清理阶段每5秒。
+- 页面进入后台后降为每20秒。
+- 网络错误按5/10/20/30秒退避，上限30秒并加入随机抖动。
+- 页面恢复前台、打开任务中心或执行Action后立即刷新。
+- 无活动或待处理任务时停止轮询。
+
+同一浏览器通过BroadcastChannel与Web Locks选出一个轮询Leader，其他标签页接收状态广播；Leader消失后重新选举。后端读接口仍必须容忍重复轮询，Leader机制只优化流量，不保证正确性。
+
+前端只消费 `04` 定义的TaskView。未知display status、stage或error code使用安全兜底文案；只有较新revision可覆盖当前状态。Action按钮严格依据allowed_actions，调用统一Action API时携带If-Match和Idempotency-Key。
+
+## 14. 历史与汇总展示技术
+
+采用“现有React/SCSS + Chart.js小范围趋势图 + CSS比例条 + 现有管理表格 + Attempt时间线”：
+
+- KPI卡：任务总数、成功率、上传总量、MediaConvert输出分钟、平均等待和平均处理时间。
+- Chart.js：每日完成/失败、上传量、等待/处理时长；按需注册Line/Bar、Scale、Tooltip和Legend。
+- CSS比例条：来源、最终状态和Top失败分类，避免为简单分布使用复杂图表。
+- 历史列表：复用MediaCMS Management Table视觉，后端游标分页、筛选和排序。
+- Job详情：抽屉内使用语义化有序时间线展示Attempt、检查点、AWS Job和清理。
+
+Chart.js Canvas必须同时提供标题、动态aria-label、文字摘要和“查看数据表”；不能只用颜色区分状态。前端不重新聚合全部历史。依据：[Chart.js可访问性](https://www.chartjs.org/docs/latest/general/accessibility.html)。
+
+建议页面层级：
+
+```mermaid
+flowchart TB
+    FILTER[时间范围与筛选] --> KPI[KPI卡]
+    FILTER --> TREND[趋势图]
+    FILTER --> DIST[来源/状态/失败比例条]
+    FILTER --> TABLE[长期历史表]
+    TABLE --> DETAIL[Job详情抽屉]
+    DETAIL --> TIMELINE[Attempt检查点时间线]
+```
+
+## 15. 通知与浏览器支持
+
+### 15.1 通知
+
+- 站内通知默认开启；成功显示轻量Toast，失败/action_required显示持久通知。
+- 通知点击打开任务或Media；连续完成可以合并摘要。
+- 浏览器Notification为可选且默认关闭，只在管理员主动开启时请求权限。
+- 页面在后台时才发送系统完成/失败/等待操作通知；拒绝权限后不重复请求。
+- MVP不发送邮件，不使用Service Worker Push；浏览器关闭后不承诺通知。
+- 通知正文不得包含本地路径、YouTube URL、Cookie或AWS诊断秘密。
+
+### 15.2 浏览器基线
+
+- 支持桌面Chrome、Edge、Firefox、Safari最近两个主要版本；不支持IE和旧WebView。
+- Chrome/Edge可使用持久文件句柄；Firefox/Safari重新选择同一文件恢复。
+- 移动端支持任务查看、CRUD、播放和普通媒体上传；HLS ZIP正式支持仅限桌面。
+- 不依赖Background Fetch。Web Locks/BroadcastChannel缺失时退化为服务端租约和普通轮询。
+- 使用能力检测而不是User-Agent决定功能。
+
+## 16. 媒体编辑与播放入口
+
+### 16.1 继续观看
+
+- 首页在存在有效断点时把“继续观看”放在媒体列表顶部。
+- 历史页提供“继续观看/全部历史”；后端按last_played_at返回，不由前端全量筛选。
+- 媒体卡片显示细进度条和“已观看x% · 继续mm:ss”。
+- completed媒体不在继续观看中但保留观看历史。
+- “清除观看进度”只删除PlaybackProgress，不删除watch历史或计数。
+- URL显式时间、恢复阈值和资源替换规则遵循第10节。
+
+### 16.2 字幕面板
+
+- 媒体编辑页展示语言、名称、来源、格式、默认轨和处理状态。
+- 管理员可上传SRT/VTT、替换、删除、下载受保护文件和重新生成双语字幕。
+- 字幕较小，经Django完成限制、规范化、校验和S3发布，不使用Multipart。
+- 字幕变化创建候选资源版本并原子激活，不重跑MediaConvert；旧版本处理期间继续播放。
+- 双语轨与中文/英文源轨存在依赖，删除源轨时必须提示同步删除或标记双语轨过期。
+- 没有字幕时显示“字幕暂无可用选项”。
+
+### 16.3 Poster与Thumbnail面板
+
+- 明确区分播放器Poster、列表Thumbnail、自动帧、YouTube来源图和管理员上传图。
+- 管理员可替换、恢复自动候选、让Thumbnail使用Poster；上传图优先级最高。
+- 小图片经Django校验和Pillow轻量裁剪/缩放，不走Multipart。
+- 视频默认16:9裁剪；音频方图按播放器容器适配，不破坏原比例。
+- 图片变化创建新资源版本；没有候选时使用系统默认视频/音频封面。
+
+### 16.4 元数据冲突与删除
+
+- 编辑页PATCH携带Media revision；409时展示服务器值与本地值供管理员选择。
+- 自动字段标明来源，管理员编辑后变为人工值。
+- 暂停、取消上传、取消处理、删除Media和关闭页面使用不同操作与文案。
+- 删除返回202并显示后台删除进度；删除失败提供重试清理，历史审计仍可查看。
+
+## 17. 能力协商与部署保护
+
+前端启动添加媒体与任务功能前调用：
+
+```text
+GET /api/media-system/capabilities
+```
+
+响应至少包含AWS模式、API主版本、Task投影版本、各来源进度配置版本、已启用来源、功能开关和前端预检查限制。
+
+```json
+{
+  "mode": "aws",
+  "api_version": "1",
+  "task_projection_version": "1",
+  "progress_profile_versions": {
+    "local_media": "1",
+    "hls_zip": "1",
+    "youtube": "1"
+  },
+  "sources": {
+    "local_media": true,
+    "hls_zip": true,
+    "youtube_single": true
+  },
+  "features": {
+    "playback_progress": true,
+    "browser_notifications": true,
+    "automated_abr": false,
+    "accelerated_transcoding": false
+  }
+}
+```
+
+- mode不是aws或API主版本不兼容时禁止创建任务并显示部署错误，不回退旧本地转码。
+- 来源卡和文件限制由响应控制；后端仍重复执行安全验证。
+- 能力响应不得包含密钥、Bucket、Role ARN、S3 Key或内部诊断。
+- 部署顺序为兼容后端、前端、开启AWS模式。
+
+## 18. 前后端接口汇总
+
+```text
+GET  /api/media-system/capabilities
+GET  /api/media-tasks/active
+GET  /api/media-tasks/history
+GET  /api/media-tasks/summary
+GET  /api/media-tasks/{id}
+GET  /api/media-tasks/{id}/attempts
+POST /api/media-tasks/{id}/actions
+
+GET    /api/playback-progress/continue
+GET    /api/playback-progress/{media_id}
+PUT    /api/playback-progress/{media_id}
+DELETE /api/playback-progress/{media_id}
+```
+
+上传会话、Cookie、CloudFront Bootstrap、字幕和视觉资源接口遵循对应模块契约。所有写接口使用Session + CSRF；S3和CloudFront凭证边界以`06`为准。

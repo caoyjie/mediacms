@@ -86,10 +86,34 @@ RBAC、LTI、SAML、`identity_providers`、`actions` 等与 User、Category、�
 - `DO_NOT_TRANSCODE_VIDEO` 不能作为唯一保护，因为旧信号和辅助任务仍可能触发本地处理。
 - 生产 AWS 模式拒绝创建 legacy-local 导入；删除 AWS Media 时创建对象清理任务，不调用本地文件删除假设。
 
-## 7. 验收
+## 7. 元数据修订与字段来源
+
+任务运行期间允许管理员编辑 Media，因此普通元数据写入使用乐观并发：
+
+- `Media.revision` 只在标题、描述、标签、分类、可见性等业务元数据改变时递增。
+- PATCH 请求携带 `If-Match`；过期 revision 返回 `409 media_revision_conflict` 和最新字段。
+- 新增可查询的字段来源记录，至少区分 `admin/file_probe/youtube/default`。
+- 管理员写入后来源改为 `admin`；自动探测只能补充空字段或覆盖仍属于同一自动来源的字段。
+- 标签和分类按集合比较，不因顺序变化制造冲突。
+- Job状态、播放进度和资源激活不递增元数据 revision；封面和字幕通过资源版本事务处理。
+
+## 8. 异步删除状态
+
+`Media.deletion_status=none/pending/deleting/failed/completed` 与 processing/publish状态分离。
+
+- 删除请求携带 Media revision，首次返回 `202 Accepted`。
+- 删除草稿先取消关联任务；删除 ready Media 立即撤销列表与播放入口，再异步删除活动、候选和暂存对象。
+- 关闭页面不等于取消；取消上传、取消处理与删除 Media 是三个不同操作。
+- 删除失败时 Media 继续不可见，任务中心提供 `retry_cleanup`。
+- Job、Attempt、标题快照和诊断长期保留；审计关系使用可空外键或快照，不能随 Media 级联删除。
+- 所有对象清理只使用数据库登记的精确 Key；普通删除不依赖 CloudFront invalidation。
+
+## 9. 验收
 
 - 状态枚举互不混用，Media ready 后 cleanup failed 仍可播放。
 - 替换任务失败时活动版本和列表可见性保持不变。
 - 第二个有效管理员无法登录或调用 API。
 - 全新迁移图可执行，保留 App 不暴露已禁用功能。
 - AWS 导入不会触发旧的本地转码、精灵图、trim 或本地播放回退。
+- 并发编辑产生可处理的 revision 冲突，后台自动结果不覆盖管理员字段。
+- 取消、删除和清理失败状态互不混用，删除 Media 后审计历史仍存在。

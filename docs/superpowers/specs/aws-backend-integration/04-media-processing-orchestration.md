@@ -134,11 +134,84 @@ Resume 创建新 Attempt，复用仍有有效证据的检查点。重新提交 M
 - 周期性 janitor 回收进程崩溃残留；失败写入独立 cleanup_status 和告警，不影响已 ready 媒体。
 - HLS ZIP 从不进入后端，不存在后端 ZIP 清理步骤。
 
-## 9. 前端任务进度契约
+## 9. 前端任务投影
 
-任务 API 返回：队列位置、当前 stage、stage progress、overall progress（仅能由加权真实阶段计算）、字节/对象计数、MediaConvert phase/percent、最近更新时间、可执行动作和安全错误。轮询可被 SSE/WebSocket 替换，但 PostgreSQL 状态仍是权威来源。
+后端将 Media、Job、Attempt、Cleanup 和供应商状态投影为稳定 `TaskView`；前端不自行解释状态机：
 
-## 10. 验收
+```text
+TaskView
+- id, revision, projection_version
+- media: id, title, thumbnail_url
+- source_type
+- display_status, stage, stage_label
+- stage_progress, overall_progress
+- processed_units, total_units, unit_type
+- transfer_speed, estimated_seconds_remaining
+- upload_queue_position, processing_queue_position
+- allowed_actions[]
+- error: code, message, retryable
+- latest_attempt_id, cleanup_status, updated_at
+```
+
+`display_status` 是只读投影：`waiting_upload/uploading/upload_paused/waiting_processing/processing/action_required/completing/completed/failed/canceled/deleting`。它不写回任何领域模型。操作按钮只由 `allowed_actions` 决定；MediaConvert原始状态只能在详情展示。
+
+`stage_progress/overall_progress` 可为 `null`；没有真实进度时前端显示不确定阶段，禁止伪造百分比。`stage_label` 返回本地化键。每次响应带 revision，旧轮询响应不能覆盖新状态。
+
+## 10. 版本化进度权重
+
+每个 Job 固定保存创建时的 `progress_profile_version`：
+
+| 本地视频/音频 | 权重 |
+| --- | ---: |
+| 文件准备与指纹 | 2% |
+| S3上传 | 48% |
+| 来源验证 | 5% |
+| MediaConvert | 35% |
+| 输出验证 | 5% |
+| 资源激活 | 3% |
+| 清理 | 2% |
+
+| HLS ZIP | 权重 |
+| --- | ---: |
+| ZIP扫描与安全检查 | 10% |
+| 文件树上传 | 60% |
+| Manifest验证 | 15% |
+| 首帧封面/缩略图 | 8% |
+| 输出验证与激活 | 5% |
+| 清理 | 2% |
+
+| YouTube | 权重 |
+| --- | ---: |
+| 元数据发现 | 5% |
+| yt-dlp下载 | 20% |
+| 原件上传S3 | 15% |
+| 字幕处理 | 5% |
+| 来源验证 | 5% |
+| MediaConvert | 40% |
+| 输出验证 | 5% |
+| 资源激活 | 3% |
+| 清理 | 2% |
+
+总体进度等于已完成权重加当前权重乘真实阶段进度，并保持单调。等待队列不增加百分比；字幕 unavailable 正常完成该阶段。无法可靠估算剩余时间时返回 `null`。
+
+## 11. 统一任务 Action API
+
+所有状态变更使用同一接口并要求 `If-Match` 与 `Idempotency-Key`。支持 `pause_upload/resume_upload/cancel/resume/skip_subtitles/retry_cleanup/acknowledge_error`；Cookie文件先通过专用上传接口保存，再单独调用 Resume。
+
+- 后端在事务中验证 revision、当前状态、allowed_actions和租约。
+- 重复 Idempotency-Key 返回首次结果，不重复创建 Attempt或取消外部任务。
+- revision冲突返回 `409 task_revision_conflict`；成功返回 `202 + 最新TaskView`。
+- 前端可以立即禁用按钮，但不能乐观伪造最终状态。
+
+## 12. 任务历史与汇总查询
+
+- 活动任务、历史、详情、Attempt和汇总使用独立接口。
+- 历史使用游标分页，默认25条；排序、来源、状态、错误、模板和媒体筛选由后端执行。
+- 汇总按7/30/90天、今年、全部聚合；历史日期可读取每日聚合表，当日实时计算。
+- 媒体删除后继续通过标题快照搜索；前端不得加载全部历史自行统计。
+- CSV导出不进入MVP。
+
+## 13. 验收
 
 - 两个重任务始终按 FIFO 执行，Worker 崩溃后不会重复提交 MediaConvert。
 - 三类来源从正确节点恢复；字幕 unavailable 不阻止发布。
@@ -146,3 +219,5 @@ Resume 创建新 Attempt，复用仍有有效证据的检查点。重新提交 M
 - 相同提交意图在崩溃恢复和快速重试中不会创建重复 MediaConvert Job，标签可追溯到 Attempt 和模板版本。
 - 取消最终停止外部工作并清理 candidate；清理失败不回退 ready。
 - yt-dlp 原件上传验证后立即释放后端磁盘，janitor 可回收崩溃残留。
+- TaskView投影、进度权重和Action幂等在多标签页与网络重试下保持一致。
+- 长期历史分页、筛选和汇总不依赖前端全量加载。
