@@ -9,7 +9,7 @@
 ```mermaid
 flowchart TB
     Internet[管理员浏览器] --> CFunnel[Cloudflare Tunnel]
-    CFunnel --> Nginx[Nginx]
+    CFunnel --> Nginx[Web容器内Nginx]
     Nginx --> Web[Django Web]
     Web --> PG[(PostgreSQL)]
     Web --> Redis[(Redis)]
@@ -23,6 +23,8 @@ flowchart TB
 ```
 
 Cloudflare Tunnel 只路由页面/API。Nginx、Django 和容器请求体限制不再承担大媒体上传，仅需覆盖字幕、Cookie 和普通表单。
+
+首期保留现有镜像内的 Supervisor + Nginx + Gunicorn 结构，避免为移除 Nginx 重写入口。Tunnel 只连接宿主机 loopback 映射端口，Nginx 仅代理轻量页面/API。Nginx、Supervisor 和 Gunicorn 的内存都计入 Web 容器上限。
 
 ## 3. CloudFormation
 
