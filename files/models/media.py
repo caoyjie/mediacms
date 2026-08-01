@@ -22,6 +22,7 @@ from imagekit.processors import ResizeToFit
 
 from .. import helpers
 from ..stop_words import STOP_WORDS
+from .domain import DeletionStatus, MediaProcessingStatus, StorageBackend
 from .encoding import EncodeProfile, Encoding
 from .subtitle import TranscriptionRequest
 from .utils import (
@@ -55,6 +56,13 @@ class Media(models.Model):
         help_text="Media can exist in one or no Channels",
     )
     description = models.TextField(blank=True)
+
+    deletion_status = models.CharField(
+        max_length=20,
+        choices=DeletionStatus.choices,
+        default=DeletionStatus.NONE,
+        db_index=True,
+    )
 
     dislikes = models.IntegerField(default=0)
 
@@ -107,12 +115,30 @@ class Media(models.Model):
 
     media_info = models.TextField(blank=True, help_text="extracted media metadata info")
 
+    metadata_sources = models.JSONField(default=dict, blank=True)
+
     media_type = models.CharField(
         max_length=20,
         blank=True,
         choices=MEDIA_TYPES_SUPPORTED,
         db_index=True,
         default="video",
+    )
+
+    processing_status = models.CharField(
+        max_length=20,
+        choices=MediaProcessingStatus.choices,
+        default=MediaProcessingStatus.DRAFT,
+        db_index=True,
+    )
+
+    revision = models.PositiveBigIntegerField(default=1)
+
+    storage_backend = models.CharField(
+        max_length=20,
+        choices=StorageBackend.choices,
+        default=StorageBackend.LEGACY_LOCAL,
+        db_index=True,
     )
 
     password = models.CharField(max_length=100, blank=True, help_text="password for private media")

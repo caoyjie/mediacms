@@ -52,7 +52,7 @@
 - Produces: `MediaProcessingStatus`, `DeletionStatus`, `encoding_status_for(processing_status: str) -> str`.
 - Produces: `Media.processing_status`, `Media.storage_backend`, `Media.revision`, queryable PostgreSQL `Media.metadata_sources`, `Media.deletion_status`, and nullable `Media.active_asset_version` added after Task 2 defines its target.
 
-- [ ] **Step 1: Write failing projection and default tests**
+- [x] **Step 1: Write failing projection and default tests**
 
 ```python
 import pytest
@@ -79,13 +79,13 @@ def test_encoding_projection(processing, encoding):
     assert encoding_status_for(processing) == encoding
 ```
 
-- [ ] **Step 2: Run the focused tests and verify the missing module/fields fail**
+- [x] **Step 2: Run the focused tests and verify the missing module/fields fail**
 
 Run: `pytest tests/aws_domain/test_media_processing_state.py -q`
 
 Expected: FAIL because `files.models.domain` and the new `Media` fields do not exist.
 
-- [ ] **Step 3: Add enums, projection, and Media scalar fields**
+- [x] **Step 3: Add enums, projection, and Media scalar fields**
 
 ```python
 from django.db import models
@@ -122,19 +122,19 @@ def encoding_status_for(processing_status: str) -> str:
 
 Add indexed `processing_status`, indexed `storage_backend` with `legacy_local|aws`, positive `revision=1`, `metadata_sources=JSONField(default=dict, blank=True)`, and indexed `deletion_status=none` to `Media`. PostgreSQL JSON key queries make field provenance queryable without adding one row per metadata field. Values are restricted by the Task 4 service to `admin|file_probe|youtube|default`. Do not override `Media.save()` to project status implicitly; state transitions must use the service in Task 4.
 
-- [ ] **Step 4: Generate the migration and verify it contains only intended scalar fields**
+- [x] **Step 4: Generate the migration and verify it contains only intended scalar fields**
 
 Run: `python manage.py makemigrations files --name aws_domain_foundation`
 
 Expected: one new `files` migration adding `processing_status`, `storage_backend`, `revision`, `metadata_sources`, and `deletion_status`; no unrelated alterations.
 
-- [ ] **Step 5: Run focused tests**
+- [x] **Step 5: Run focused tests**
 
 Run: `pytest tests/aws_domain/test_media_processing_state.py -q`
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add files/models/domain.py files/models/media.py files/models/__init__.py files/migrations/0021_aws_domain_foundation.py tests/aws_domain
