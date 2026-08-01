@@ -22,6 +22,7 @@ MediaCMS 是唯一业务系统和轻量控制面；浏览器、S3、MediaConvert
 | [06-cloudfront-playback.md](06-cloudfront-playback.md) | 签名 Cookie Bootstrap、续期与私有媒体播放授权契约 |
 | [07-deployment-and-acceptance.md](07-deployment-and-acceptance.md) | 部署、全新数据库、测试矩阵、上线与旧资源清理 |
 | [08-frontend-experience.md](08-frontend-experience.md) | 添加媒体向导、上传客户端、全局任务中心、进度图标、播放器客户端与断点续播 |
+| [09-frontend-layout.md](09-frontend-layout.md) | 兼容现有 MediaCMS 的 Header、Sidebar、页面、抽屉、播放器与响应式布局 |
 
 模块之间通过本文定义的公共模型和不变量协作；同一要求只在表中指定的模块内作权威定义。
 
@@ -107,10 +108,11 @@ flowchart LR
     P --> F[08 前端体验]
     U --> F
     O --> F
-    F --> V[07 部署与验收]
+    F --> L[09 前端布局]
+    L --> V[07 部署与验收]
 ```
 
-建议实施顺序为：模型与迁移 → AWS 基础设施 → 上传 → 编排与 MediaConvert → YouTube/字幕 → 播放授权 → 端到端部署验收。
+建议实施顺序为：模型与迁移 → AWS 基础设施 → 上传 → 编排与 MediaConvert → YouTube/字幕 → 播放授权 → 前端体验与布局 → 端到端部署验收。
 
 ## 7. 范围外
 
