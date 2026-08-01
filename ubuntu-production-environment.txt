@@ -1,0 +1,166 @@
+
+=== Ubuntu production environment ===
+Collected at: 2026-08-01T23:09:12+08:00
+
+=== OS ===
+Linux eonf54mw.vm 6.8.0-62-generic #65-Ubuntu SMP PREEMPT_DYNAMIC Mon May 19 17:15:03 UTC 2025 x86_64 x86_64 x86_64 GNU/Linux
+PRETTY_NAME="Ubuntu 24.04.2 LTS"
+NAME="Ubuntu"
+VERSION_ID="24.04"
+VERSION="24.04.2 LTS (Noble Numbat)"
+VERSION_CODENAME=noble
+ID=ubuntu
+ID_LIKE=debian
+HOME_URL="https://www.ubuntu.com/"
+SUPPORT_URL="https://help.ubuntu.com/"
+BUG_REPORT_URL="https://bugs.launchpad.net/ubuntu/"
+PRIVACY_POLICY_URL="https://www.ubuntu.com/legal/terms-and-policies/privacy-policy"
+UBUNTU_CODENAME=noble
+LOGO=ubuntu-logo
+Architecture: x86_64
+Timezone: Asia/Shanghai
+
+=== CPU ===
+Architecture:                         x86_64
+CPU(s):                               2
+Model name:                           Intel Xeon Processor (Skylake, IBRS)
+Virtualization:                       VT-x
+Available processors: 2
+
+=== Memory and swap ===
+               total        used        free      shared  buff/cache   available
+Mem:           3.8Gi       3.1Gi       132Mi        42Mi       932Mi       730Mi
+Swap:          3.8Gi       1.5Gi       2.3Gi
+NAME      TYPE SIZE USED PRIO
+/swap.img file 3.8G 1.5G   -2
+
+=== Storage ===
+NAME   TYPE  SIZE FSTYPE MOUNTPOINTS
+vda    disk  100G        
+├─vda1 part    1M        
+└─vda2 part  100G xfs    /
+Filesystem     Type  Size  Used Avail Use% Mounted on
+/dev/vda2      xfs   100G   89G   12G  89% /
+Filesystem     Inodes IUsed IFree IUse% Mounted on
+/dev/vda2         26M  2.1M   24M    8% /
+
+=== Resource limits ===
+Open files: 204800
+Processes: 204800
+vm.overcommit_memory = 0
+fs.inotify.max_user_watches = 29942
+fs.inotify.max_user_instances = 128
+
+=== Network devices ===
+lo               UNKNOWN        00:00:00:00:00:00 <LOOPBACK,UP,LOWER_UP> 
+eth0             UP             52:54:d7:25:c4:b3 <BROADCAST,MULTICAST,UP,LOWER_UP> 
+eth1             UP             52:54:8f:7d:ab:b3 <BROADCAST,MULTICAST,UP,LOWER_UP> 
+tailscale0       UNKNOWN        <POINTOPOINT,MULTICAST,NOARP,UP,LOWER_UP> 
+br-5ff586ec3900  UP             06:d0:18:2a:72:45 <BROADCAST,MULTICAST,UP,LOWER_UP> 
+docker0          UP             96:f2:c2:f4:f5:3d <BROADCAST,MULTICAST,UP,LOWER_UP> 
+veth03f6386@if2  UP             62:47:8c:38:8c:1e <BROADCAST,MULTICAST,UP,LOWER_UP> 
+br-55b61e4cb7c6  UP             7e:35:a1:6b:cc:3b <BROADCAST,MULTICAST,UP,LOWER_UP> 
+br-3c6e9c77bdf8  UP             42:ad:db:35:68:f4 <BROADCAST,MULTICAST,UP,LOWER_UP> 
+veth5192d14@if2  UP             2a:e6:4a:32:af:47 <BROADCAST,MULTICAST,UP,LOWER_UP> 
+veth7f58f2f@if2  UP             9e:1e:72:a4:0f:60 <BROADCAST,MULTICAST,UP,LOWER_UP> 
+veth1bfbd83@if2  UP             62:50:02:b7:49:43 <BROADCAST,MULTICAST,UP,LOWER_UP> 
+veth114b463@if2  UP             da:e9:f9:17:1f:9b <BROADCAST,MULTICAST,UP,LOWER_UP> 
+veth3da7626@if2  UP             6e:1b:7d:fe:0e:6b <BROADCAST,MULTICAST,UP,LOWER_UP> 
+vethe379355@if2  UP             9a:83:ae:46:5e:0c <BROADCAST,MULTICAST,UP,LOWER_UP> 
+veth93dee9c@if2  UP             b6:9c:6b:38:d2:48 <BROADCAST,MULTICAST,UP,LOWER_UP> 
+veth78283ed@if2  UP             46:fd:48:d3:d1:fe <BROADCAST,MULTICAST,UP,LOWER_UP> 
+veth4714d8e@if2  UP             1e:57:ed:b9:50:61 <BROADCAST,MULTICAST,UP,LOWER_UP> 
+vethb763fae@if2  UP             0e:76:8f:69:4b:2b <BROADCAST,MULTICAST,UP,LOWER_UP> 
+veth32cb89f@if2  UP             2e:ae:cd:2c:5d:4b <BROADCAST,MULTICAST,UP,LOWER_UP> 
+veth335d1ef@if2  UP             a6:dc:4b:3d:c1:70 <BROADCAST,MULTICAST,UP,LOWER_UP> 
+Addresses and public IPs are intentionally omitted.
+
+=== Runtime versions ===
+git version 2.43.0
+Python 3.13.13
+v24.16.0
+11.13.0
+Docker version 29.5.2, build 79eb04c
+Docker Compose version v5.1.4
+aws-cli/2.34.53 Python/3.14.5 Linux/6.8.0-62-generic exe/x86_64.ubuntu.24
+cloudflared version 2026.5.0 (built 2026-05-13-11:24 UTC)
+
+=== Ubuntu packages ===
+dpkg-query: no packages found matching postgresql
+dpkg-query: no packages found matching redis-server
+dpkg-query: no packages found matching nodejs
+dpkg-query: no packages found matching ffmpeg
+awscli 
+cloudflared 2026.5.0
+docker-ce 5:29.5.2-1~ubuntu.24.04~noble
+docker-compose-plugin 5.1.4-1~ubuntu.24.04~noble
+docker.io 
+python3 3.12.3-0ubuntu2.1
+
+=== Container capacity ===
+CPUs=2 Memory=4106219520 StorageDriver=overlayfs CgroupDriver=systemd CgroupVersion=2
+TYPE            TOTAL     ACTIVE    SIZE      RECLAIMABLE
+Images          35        9         31.48GB   16.59GB (52%)
+Containers      13        13        959.7MB   0B (0%)
+Local Volumes   27        4         1.093GB   819.6MB (74%)
+Build Cache     106       0         6.297GB   43.37MB
+
+=== Relevant services ===
+  cloudflared.service         loaded active running cloudflared
+  containerd.service          loaded active running containerd container runtime
+  docker.service              loaded active running Docker Application Container Engine
+System state: degraded
+
+=== Listening service ports ===
+tcp   LISTEN 0      4096                     127.0.0.1:6379       0.0.0.0:*    users:(("docker-proxy",pid=1887584,fd=8))  
+tcp   LISTEN 0      4096                     127.0.0.1:8000       0.0.0.0:*    users:(("docker-proxy",pid=2624168,fd=8))  
+tcp   LISTEN 0      4096                     127.0.0.1:8080       0.0.0.0:*    users:(("docker-proxy",pid=2641951,fd=8))  
+tcp   LISTEN 0      4096                     127.0.0.1:5432       0.0.0.0:*    users:(("docker-proxy",pid=1887497,fd=8))  
+tcp   LISTEN 0      4096                             *:443              *:*    users:(("xray",pid=1226749,fd=4))          
+
+=== Logs and OOM history ===
+Archived and active journals take up 3.5G in the file system.
+Jul 09 09:02:35 eonf54mw.vm kernel: Out of memory: Killed process 2614509 (rpmbuild) total-vm:2416968kB, anon-rss:1601404kB, file-rss:3824kB, shmem-rss:0kB, UID:0 pgtables:3628kB oom_score_adj:0
+Jul 09 09:02:35 eonf54mw.vm kernel: oom-kill:constraint=CONSTRAINT_NONE,nodemask=(null),cpuset=user.slice,mems_allowed=0,global_oom,task_memcg=/user.slice/user-0.slice/session-251.scope,task=rpmbuild,pid=2614509,uid=0
+Jul 09 09:02:34 eonf54mw.vm kernel: MainThread invoked oom-killer: gfp_mask=0x140cca(GFP_HIGHUSER_MOVABLE|__GFP_COMP), order=0, oom_score_adj=100
+Jul 09 08:52:45 eonf54mw.vm kernel: Out of memory: Killed process 2611965 (rpmbuild) total-vm:2416968kB, anon-rss:1518852kB, file-rss:3756kB, shmem-rss:0kB, UID:0 pgtables:3644kB oom_score_adj:0
+Jul 09 08:52:45 eonf54mw.vm kernel: oom-kill:constraint=CONSTRAINT_NONE,nodemask=(null),cpuset=user.slice,mems_allowed=0,global_oom,task_memcg=/user.slice/user-0.slice/session-250.scope,task=rpmbuild,pid=2611965,uid=0
+Jul 09 08:52:44 eonf54mw.vm kernel: MainThread invoked oom-killer: gfp_mask=0x140cca(GFP_HIGHUSER_MOVABLE|__GFP_COMP), order=0, oom_score_adj=100
+Jun 25 00:18:24 eonf54mw.vm kernel: Out of memory: Killed process 514461 (openclaw-hooks) total-vm:1968064kB, anon-rss:392232kB, file-rss:2652kB, shmem-rss:0kB, UID:0 pgtables:13944kB oom_score_adj:100
+Jun 25 00:18:24 eonf54mw.vm kernel: oom-kill:constraint=CONSTRAINT_NONE,nodemask=(null),cpuset=init.scope,mems_allowed=0,global_oom,task_memcg=/user.slice/user-0.slice/user@0.service/app.slice/openclaw-gateway.service,task=openclaw-hooks,pid=514461,uid=0
+Jun 25 00:18:23 eonf54mw.vm kernel: systemd invoked oom-killer: gfp_mask=0x140cca(GFP_HIGHUSER_MOVABLE|__GFP_COMP), order=0, oom_score_adj=0
+Jun 25 00:00:13 eonf54mw.vm kernel: Out of memory: Killed process 61449 (java) total-vm:3295464kB, anon-rss:16704kB, file-rss:128kB, shmem-rss:0kB, UID:2000 pgtables:3532kB oom_score_adj:0
+Jun 25 00:00:13 eonf54mw.vm kernel: oom-kill:constraint=CONSTRAINT_NONE,nodemask=(null),cpuset=init.scope,mems_allowed=0,global_oom,task_memcg=/system.slice/docker-3ba843632e218ae05c9c6d8add0876788e8a17a90b25a1c101bc63c3e767023b.scope,task=java,pid=61449,uid=2000
+Jun 25 00:00:11 eonf54mw.vm kernel: systemd invoked oom-killer: gfp_mask=0x140cca(GFP_HIGHUSER_MOVABLE|__GFP_COMP), order=0, oom_score_adj=0
+
+=== Display environment ===
+DISPLAY=not-set
+WAYLAND_DISPLAY=not-set
+XDG_SESSION_TYPE=tty
+
+=== MediaCMS repository ===
+Working directory: /root/project/mediacms
+## feat/aws-backend-integration...origin/feat/aws-backend-integration
+?? ubuntu-production-environment.txt
+673897c arch resource
+157M	.
+5.4M	frontend
+26M	frontend-tools
+67M	static
+
+=== Compose services ===
+time="2026-08-01T23:09:19+08:00" level=warning msg="/root/project/mediacms/docker-compose.yaml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion"
+db
+redis
+migrations
+celery_worker
+web
+celery_beat
+time="2026-08-01T23:09:19+08:00" level=warning msg="/root/project/mediacms/docker-compose.yaml: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion"
+CONTAINER           REPOSITORY          TAG                 PLATFORM            IMAGE ID            SIZE                CREATED
+
+=== Optional network test ===
+Skipped. Run again with --network to download a 10 MB test file.
+
+=== Privacy reminder ===
+Review output before sharing. No secrets were intentionally collected.
