@@ -52,3 +52,4 @@ from .utils import original_thumbnail_file_path  # noqa: F401
 from .utils import subtitles_file_path  # noqa: F401
 from .utils import validate_rating  # noqa: F401
 from .video_data import VideoChapterData, VideoTrimRequest  # noqa: F401
+from .youtube import YouTubeCookieVersion  # noqa: F401

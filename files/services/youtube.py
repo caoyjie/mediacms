@@ -1,0 +1,92 @@
+"""YouTube control-plane helpers. Heavy bytes stay in the attempt temp dir."""
+
+from dataclasses import dataclass
+from pathlib import Path
+import re
+from urllib.parse import parse_qs, urlparse
+
+
+@dataclass(frozen=True, slots=True)
+class CaptionTrack:
+    url: str
+    language: str
+    kind: str
+
+
+def normalize_youtube_url(value):
+    parsed = urlparse(value if "://" in value else f"https://{value}")
+    host = parsed.netloc.lower().split(":", 1)[0]
+    if host not in {"youtube.com", "www.youtube.com", "m.youtube.com", "youtu.be"}:
+        raise ValueError("URL is not a YouTube video")
+    query = parse_qs(parsed.query)
+    if host == "youtu.be":
+        video_id = parsed.path.strip("/")
+    else:
+        video_id = query.get("v", [""])[0]
+        if parsed.path.startswith("/playlist") or query.get("list") and not video_id:
+            raise ValueError("only a single video is supported")
+    if not re.fullmatch(r"[A-Za-z0-9_-]{6,}", video_id or ""):
+        raise ValueError("URL is not a valid single video")
+    if query.get("list") and not video_id:
+        raise ValueError("only a single video is supported")
+    return video_id
+
+
+def choose_caption_tracks(raw):
+    def choose(language):
+        candidates = []
+        for code, values in (raw or {}).items():
+            if code == language or code.lower().split("-")[0] == language:
+                for item in values or []:
+                    candidates.append(CaptionTrack(item["url"], language, item.get("kind", "manual")))
+        candidates.sort(key=lambda track: (track.kind != "manual", track.url))
+        return candidates[0] if candidates else None
+    return {language: track for language in ("zh", "en") if (track := choose(language))}
+
+
+def classify_ytdlp_error(message):
+    lowered = str(message).lower()
+    if any(term in lowered for term in ("sign in", "age", "login", "authentication", "confirm your country")):
+        return "cookies"
+    if any(term in lowered for term in ("no subtitles", "there are no subtitles", "subtitles are not available")):
+        return "unavailable"
+    if any(term in lowered for term in ("429", "timed out", "temporarily", "connection reset")):
+        return "retryable"
+    return "unknown"
+
+
+def extract_info(url, *, cookie_file=None):
+    import yt_dlp
+    options = {"quiet": True, "skip_download": True, "noplaylist": True}
+    if cookie_file:
+        options["cookiefile"] = str(cookie_file)
+    with yt_dlp.YoutubeDL(options) as downloader:
+        info = downloader.extract_info(url, download=False)
+    if info.get("_type") == "playlist" or info.get("entries"):
+        raise ValueError("only a single video is supported")
+    return info
+
+
+def download_source(url, output_dir, *, cookie_file=None):
+    import yt_dlp
+    target = Path(output_dir) / "source.%(ext)s"
+    options = {
+        "quiet": True,
+        "noplaylist": True,
+        "format": "bestvideo*+bestaudio/best",
+        "outtmpl": str(target),
+        "merge_output_format": "mp4",
+    }
+    if cookie_file:
+        options["cookiefile"] = str(cookie_file)
+    try:
+        with yt_dlp.YoutubeDL(options) as downloader:
+            info = downloader.extract_info(url, download=True)
+            path = Path(downloader.prepare_filename(info))
+            if not path.exists():
+                path = next(Path(output_dir).glob("source.*"))
+            return path, info
+    except Exception as error:
+        kind = classify_ytdlp_error(str(error))
+        error.kind = kind
+        raise
