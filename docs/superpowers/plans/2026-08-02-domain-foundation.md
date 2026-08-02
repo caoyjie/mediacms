@@ -294,7 +294,7 @@ git commit -m "feat: add ingestion persistence models"
 - Consumes: `Media`, `MediaAssetVersion`, `MediaProcessingStatus`, `encoding_status_for`.
 - Produces: `transition_media(media_id: int, target: str) -> Media`, `update_media_metadata(media_id: int, expected_revision: int, changes: dict, source: str) -> Media`, `request_media_deletion(media_id: int, expected_revision: int) -> Media`, and `activate_asset_version(media_id: int, version_id: UUID) -> Media`.
 
-- [ ] **Step 1: Write failing transition and replacement-safety tests**
+- [x] **Step 1: Write failing transition and replacement-safety tests**
 
 ```python
 import pytest
@@ -334,13 +334,13 @@ def test_admin_metadata_update_increments_revision_and_owns_field_source():
     assert updated.metadata_sources["title"] == "admin"
 ```
 
-- [ ] **Step 2: Run tests and verify the service is missing**
+- [x] **Step 2: Run tests and verify the service is missing**
 
 Run: `pytest tests/aws_domain/test_media_state_service.py -q`
 
 Expected: FAIL importing `files.services.media_state`.
 
-- [ ] **Step 3: Implement explicit transition graph and locked activation**
+- [x] **Step 3: Implement explicit transition graph and locked activation**
 
 Define transitions `draft->queued`, `queued->processing`, `processing->ready|failed`, and `failed->queued`. Lock Media with `select_for_update()`. Activation locks Media plus target version, rejects cross-media versions and non-candidates, verifies that the candidate contains a registered `hls_master` asset matching `manifest_key`, retires the previous active version, activates the candidate, switches the pointer, and projects `ready/success` inside one `transaction.atomic()` block. Do not delete S3/local objects in this service.
 
@@ -348,7 +348,7 @@ Define transitions `draft->queued`, `queued->processing`, `processing->ready|fai
 
 `request_media_deletion` checks revision, changes `deletion_status` from `none|failed` to `pending`, increments revision once, sets `listable=False`, and does not delete Media, Job, Attempt or objects. Later orchestration owns cancel and cleanup execution.
 
-- [ ] **Step 4: Add negative tests**
+- [x] **Step 4: Add negative tests**
 
 Cover illegal `draft->ready`, candidate belonging to another Media, candidate without its registered manifest asset, activating retired version, replacement failure leaving the old pointer unchanged, cleanup failure without changing ready Media, stale metadata revision conflict, category/tag order not incrementing revision, automatic source not overwriting admin data, repeated deletion request idempotency, and Job history surviving a nullable Media deletion.
 
@@ -356,7 +356,7 @@ Run: `pytest tests/aws_domain/test_media_state_service.py -q`
 
 Expected: PASS with all positive and negative cases.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add files/services tests/aws_domain/test_media_state_service.py
