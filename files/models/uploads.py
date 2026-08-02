@@ -126,7 +126,9 @@ class BrowserUploadObject(models.Model):
         db_index=True,
     )
     expected_size = models.PositiveBigIntegerField()
+    compressed_size = models.PositiveBigIntegerField(blank=True, null=True)
     content_type = models.CharField(max_length=255)
+    expected_checksum = models.CharField(max_length=255, blank=True)
     multipart_upload_id = models.CharField(max_length=1024, blank=True)
     checksum = models.CharField(max_length=255, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)

@@ -3,7 +3,7 @@ from math import ceil
 from pathlib import PurePosixPath
 from uuid import UUID
 
-from django.db import transaction
+from django.db import models, transaction
 from django.utils import timezone
 from django.utils.html import strip_tags
 
@@ -22,6 +22,14 @@ from files.models.uploads import (
     BrowserUploadObjectStatus,
     BrowserUploadStatus,
     BrowserUploadStrategy,
+)
+from files.services.hls_package import (
+    MAX_HLS_FILES,
+    MAX_HLS_TOTAL_SIZE,
+    HlsInventoryEntry,
+    UnsafeHlsPackage,
+    validate_hls_inventory,
+    validate_hls_manifests,
 )
 from files.services.processing_queue import enqueue_job
 from files.services.upload_lease import release_upload_lease, require_upload_lease
@@ -57,11 +65,34 @@ class CreateFileSession:
 
 
 @dataclass(frozen=True, slots=True)
+class CreateHlsSession:
+    title: str
+    total_size: int
+    file_count: int
+    package_fingerprint: str
+    idempotency_key: str
+
+
+@dataclass(frozen=True, slots=True)
 class FileSessionCreated:
     session_id: UUID
     job_id: UUID
     media_id: int
     object_id: UUID
+
+
+@dataclass(frozen=True, slots=True)
+class HlsSessionCreated:
+    session_id: UUID
+    job_id: UUID
+    media_id: int
+
+
+@dataclass(frozen=True, slots=True)
+class RegisteredHlsObject:
+    object_id: UUID
+    relative_path: str
+    strategy: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -209,6 +240,164 @@ def create_file_session(owner, command, gateway):
     upload_object.multipart_upload_id = upload_id
     upload_object.status = BrowserUploadObjectStatus.UPLOADING
     return _created_result(session, upload_object)
+
+
+def _validated_hls_command(command):
+    title = strip_tags(command.title).strip() if isinstance(command.title, str) else ""
+    if not title:
+        raise InvalidUploadCommand("Title is required.")
+    if not isinstance(command.total_size, int) or not 0 < command.total_size <= MAX_HLS_TOTAL_SIZE:
+        raise InvalidUploadCommand("HLS package size must be between 1 byte and 20 GiB.")
+    if not isinstance(command.file_count, int) or not 0 < command.file_count <= MAX_HLS_FILES:
+        raise InvalidUploadCommand("HLS package must contain between 1 and 10,000 files.")
+    if not isinstance(command.package_fingerprint, str) or not command.package_fingerprint:
+        raise InvalidUploadCommand("Package fingerprint is required.")
+    if not isinstance(command.idempotency_key, str) or not command.idempotency_key:
+        raise InvalidUploadCommand("Idempotency key is required.")
+    return title[:100]
+
+
+def _hls_created_result(session):
+    return HlsSessionCreated(session.id, session.job_id, session.job.media_id)
+
+
+def create_hls_session(owner, command):
+    title = _validated_hls_command(command)
+    existing = BrowserUploadSession.objects.select_related("job__media").filter(
+        create_idempotency_key=command.idempotency_key
+    ).first()
+    if existing is not None:
+        matches = all(
+            (
+                existing.owner_id == owner.id,
+                existing.source_kind == "hls",
+                existing.expected_total_size == command.total_size,
+                existing.expected_file_count == command.file_count,
+                existing.file_fingerprint == command.package_fingerprint,
+                existing.job.media_title_snapshot == title,
+            )
+        )
+        if not matches:
+            raise UploadIdempotencyConflict("Idempotency key was already used for another upload.")
+        return _hls_created_result(existing)
+
+    with transaction.atomic():
+        media = Media.objects.create(
+            title=title,
+            user=owner,
+            media_type="video",
+            storage_backend=StorageBackend.AWS,
+        )
+        job = MediaIngestionJob.objects.create(
+            media=media,
+            media_title_snapshot=title,
+            source_type="hls_zip",
+            stage="waiting_upload",
+        )
+        session = BrowserUploadSession.objects.create(
+            job=job,
+            owner=owner,
+            source_kind="hls",
+            expected_total_size=command.total_size,
+            expected_file_count=command.file_count,
+            file_fingerprint=command.package_fingerprint,
+            create_idempotency_key=command.idempotency_key,
+        )
+    return _hls_created_result(session)
+
+
+def _registered_hls_objects(objects):
+    return tuple(
+        RegisteredHlsObject(upload_object.id, upload_object.relative_path, upload_object.strategy)
+        for upload_object in objects
+    )
+
+
+def register_hls_inventory(session_id, owner_token, entries, gateway):
+    require_upload_lease(session_id, owner_token)
+    entries = tuple(entries)
+    if not entries or len(entries) > 200:
+        raise InvalidUploadCommand("An HLS inventory batch must contain between 1 and 200 files.")
+    try:
+        inventory = validate_hls_inventory(entries)
+    except UnsafeHlsPackage as error:
+        raise InvalidUploadCommand(str(error)) from error
+
+    new_objects = []
+    with transaction.atomic():
+        require_upload_lease(session_id, owner_token)
+        session = BrowserUploadSession.objects.select_for_update().get(pk=session_id)
+        if session.source_kind != "hls" or session.status != BrowserUploadStatus.UPLOADING:
+            raise InvalidUploadCommand("Only an active HLS upload can register inventory.")
+        registered = []
+        changed = False
+        for entry in inventory.entries:
+            strategy = (
+                BrowserUploadStrategy.MULTIPART
+                if entry.size >= session.part_size
+                else BrowserUploadStrategy.SINGLE_PUT
+            )
+            upload_object, created = BrowserUploadObject.objects.get_or_create(
+                session=session,
+                relative_path=entry.path,
+                defaults={
+                    "s3_key": f"{session.upload_prefix}{entry.path}",
+                    "strategy": strategy,
+                    "expected_size": entry.size,
+                    "compressed_size": entry.compressed_size,
+                    "content_type": entry.content_type,
+                    "expected_checksum": entry.checksum_sha256,
+                },
+            )
+            expected = all(
+                (
+                    upload_object.expected_size == entry.size,
+                    upload_object.compressed_size == entry.compressed_size,
+                    upload_object.content_type == entry.content_type,
+                    upload_object.expected_checksum == entry.checksum_sha256,
+                    upload_object.strategy == strategy,
+                )
+            )
+            if not created and not expected:
+                raise UploadIdempotencyConflict("HLS path was already registered with different metadata.")
+            if created:
+                changed = True
+                new_objects.append(upload_object)
+            registered.append(upload_object)
+
+        aggregate = BrowserUploadObject.objects.filter(session=session).aggregate(
+            count=models.Count("id"),
+            size=models.Sum("expected_size"),
+        )
+        if aggregate["count"] > session.expected_file_count or aggregate["size"] > session.expected_total_size:
+            raise InvalidUploadCommand("Registered HLS inventory exceeds the declared package totals.")
+        if changed:
+            session.revision += 1
+            session.save(update_fields=("revision", "updated_at"))
+
+    for upload_object in new_objects:
+        if upload_object.strategy == BrowserUploadStrategy.MULTIPART:
+            upload_id = gateway.create_multipart(upload_object.s3_key, upload_object.content_type)
+            BrowserUploadObject.objects.filter(pk=upload_object.pk).update(
+                multipart_upload_id=upload_id,
+                status=BrowserUploadObjectStatus.UPLOADING,
+            )
+            upload_object.multipart_upload_id = upload_id
+            upload_object.status = BrowserUploadObjectStatus.UPLOADING
+    return _registered_hls_objects(registered)
+
+
+def issue_hls_object_url(session_id, owner_token, object_id, gateway):
+    require_upload_lease(session_id, owner_token)
+    upload_object = BrowserUploadObject.objects.get(pk=object_id, session_id=session_id)
+    if upload_object.strategy != BrowserUploadStrategy.SINGLE_PUT:
+        raise InvalidUploadCommand("Multipart HLS objects require Part URLs.")
+    return gateway.presign_put(
+        upload_object.s3_key,
+        upload_object.content_type,
+        upload_object.expected_size,
+        upload_object.expected_checksum,
+    )
 
 
 def issue_part_urls(session_id, owner_token, part_requests, gateway):
@@ -440,6 +629,122 @@ def complete_file_upload(
     evidence = gateway.head_object(upload_object.s3_key)
     _verify_completed_object(upload_object, evidence)
     result = _finalize_file_completion(session_id, upload_object.id, evidence)
+    release_upload_lease(session_id, owner_token)
+    return result
+
+
+def _hls_inventory_from_objects(upload_objects):
+    return validate_hls_inventory(
+        HlsInventoryEntry(
+            upload_object.relative_path,
+            upload_object.expected_size,
+            upload_object.compressed_size,
+            upload_object.content_type,
+            upload_object.expected_checksum,
+        )
+        for upload_object in upload_objects
+    )
+
+
+def complete_hls_upload(
+    session_id,
+    owner_token,
+    idempotency_key,
+    expected_revision,
+    manifest_bodies,
+    gateway,
+):
+    if not idempotency_key:
+        raise InvalidUploadCommand("Completion idempotency key is required.")
+    session = BrowserUploadSession.objects.select_related("job").get(pk=session_id)
+    if session.status == BrowserUploadStatus.COMPLETED:
+        if session.completion_idempotency_key != idempotency_key:
+            raise UploadIdempotencyConflict("Upload was completed with another idempotency key.")
+        return _progress_snapshot(session)
+    require_upload_lease(session_id, owner_token)
+    if session.source_kind != "hls":
+        raise InvalidUploadCommand("Upload session is not an HLS package.")
+    if session.revision != expected_revision:
+        raise UploadRevisionConflict(session.revision)
+
+    upload_objects = list(session.upload_objects.order_by("relative_path"))
+    if len(upload_objects) != session.expected_file_count:
+        raise UploadVerificationFailed("Registered HLS file count does not match the package declaration.")
+    if sum(upload_object.expected_size for upload_object in upload_objects) != session.expected_total_size:
+        raise UploadVerificationFailed("Registered HLS bytes do not match the package declaration.")
+    try:
+        inventory = _hls_inventory_from_objects(upload_objects)
+        closure = validate_hls_manifests(inventory, manifest_bodies)
+    except UnsafeHlsPackage as error:
+        raise UploadVerificationFailed(str(error)) from error
+
+    evidence_by_id = {}
+    for upload_object in upload_objects:
+        evidence = gateway.head_object(upload_object.s3_key)
+        _verify_completed_object(upload_object, evidence)
+        checksum_mismatch = (
+            upload_object.strategy == BrowserUploadStrategy.SINGLE_PUT,
+            evidence.checksum_sha256 != upload_object.expected_checksum,
+        )
+        if all(checksum_mismatch):
+            raise UploadVerificationFailed("Completed S3 object checksum does not match.")
+        evidence_by_id[upload_object.id] = evidence
+
+    with transaction.atomic():
+        locked = BrowserUploadSession.objects.select_for_update().select_related("job").get(pk=session_id)
+        require_upload_lease(session_id, owner_token)
+        if locked.revision != expected_revision:
+            raise UploadRevisionConflict(locked.revision)
+        locked_objects = list(
+            BrowserUploadObject.objects.select_for_update().filter(session=locked).order_by("relative_path")
+        )
+        for upload_object in locked_objects:
+            upload_object.status = BrowserUploadObjectStatus.VERIFIED
+            upload_object.checksum = evidence_by_id[upload_object.id].checksum_sha256
+        BrowserUploadObject.objects.bulk_update(locked_objects, ("status", "checksum", "updated_at"))
+        locked.status = BrowserUploadStatus.COMPLETED
+        locked.completion_idempotency_key = idempotency_key
+        locked.confirmed_bytes = locked.expected_total_size
+        locked.confirmed_file_count = locked.expected_file_count
+        locked.revision += 1
+        locked.save(
+            update_fields=(
+                "status",
+                "completion_idempotency_key",
+                "confirmed_bytes",
+                "confirmed_file_count",
+                "revision",
+                "updated_at",
+            )
+        )
+        entry_object = next(
+            upload_object for upload_object in locked_objects if upload_object.relative_path == closure.entry_manifest
+        )
+        Media.objects.filter(pk=locked.job.media_id).update(hls_file=entry_object.s3_key)
+        attempt, _ = MediaJobAttempt.objects.get_or_create(
+            job=locked.job,
+            sequence=1,
+            defaults={"status": AttemptStatus.QUEUED},
+        )
+        MediaJobCheckpoint.objects.update_or_create(
+            attempt=attempt,
+            name="source_verified",
+            defaults={
+                "status": CheckpointStatus.COMPLETED,
+                "evidence": {
+                    "entry_manifest": closure.entry_manifest,
+                    "closure_paths": list(closure.paths),
+                    "object_ids": [str(upload_object.id) for upload_object in locked_objects],
+                },
+                "completed_at": timezone.now(),
+            },
+        )
+        MediaIngestionJob.objects.filter(pk=locked.job_id).update(
+            stage="source_verified",
+            source_metadata={"hls_entry_manifest": closure.entry_manifest},
+        )
+        enqueue_job(locked.job_id)
+        result = _progress_snapshot(locked)
     release_upload_lease(session_id, owner_token)
     return result
 
