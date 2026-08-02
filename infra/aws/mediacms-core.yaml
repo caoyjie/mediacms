@@ -1,0 +1,127 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: MediaCMS private AWS media infrastructure
+
+Metadata:
+  cfn-lint:
+    config:
+      ignore_checks: [W2001, W8001]
+
+Parameters:
+  Environment:
+    Type: String
+    AllowedValues: [dev, prod]
+  ResourceNamePrefix:
+    Type: String
+    Default: mediacms
+    AllowedValues: [mediacms, mediacms-dev]
+  MediaBucketName:
+    Type: String
+    Default: ''
+    AllowedPattern: '^$|^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$'
+  ApplicationOrigin:
+    Type: String
+    AllowedPattern: '^(https://[A-Za-z0-9.-]+(?::[0-9]+)?|http://localhost(?::[0-9]+)?)$'
+  RuntimeAccessKeyAEnabled:
+    Type: String
+    Default: 'true'
+    AllowedValues: ['true', 'false']
+  RuntimeAccessKeyBEnabled:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+  RuntimeActiveAccessKeySlot:
+    Type: String
+    Default: A
+    AllowedValues: [A, B]
+  CloudFrontPublicKeyCurrent:
+    Type: String
+    Description: Current CloudFront RSA public key in PEM format.
+  CloudFrontPublicKeyNext:
+    Type: String
+    Description: Next CloudFront RSA public key in PEM format.
+  EnableCustomDomain:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+  MediaDomainName:
+    Type: String
+    Default: ''
+  AcmCertificateArn:
+    Type: String
+    Default: ''
+  AlarmNotificationEmail:
+    Type: String
+    Default: ''
+  AutomatedAbrEnabled:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+  AccelerationMode:
+    Type: String
+    Default: DISABLED
+    AllowedValues: [DISABLED, PREFERRED]
+
+Rules:
+  ResourceNamePrefixMatchesEnvironment:
+    Assertions:
+      - Assert: !Or
+          - !And
+            - !Equals [!Ref Environment, prod]
+            - !Equals [!Ref ResourceNamePrefix, mediacms]
+          - !And
+            - !Equals [!Ref Environment, dev]
+            - !Equals [!Ref ResourceNamePrefix, mediacms-dev]
+        AssertDescription: ResourceNamePrefix must match the selected Environment.
+  RuntimeAccessKeySlotsAreValid:
+    Assertions:
+      - Assert: !Or
+          - !Equals [!Ref RuntimeAccessKeyAEnabled, 'true']
+          - !Equals [!Ref RuntimeAccessKeyBEnabled, 'true']
+        AssertDescription: At least one runtime access key slot must be enabled.
+      - Assert: !Or
+          - !And
+            - !Equals [!Ref RuntimeActiveAccessKeySlot, A]
+            - !Equals [!Ref RuntimeAccessKeyAEnabled, 'true']
+          - !And
+            - !Equals [!Ref RuntimeActiveAccessKeySlot, B]
+            - !Equals [!Ref RuntimeAccessKeyBEnabled, 'true']
+        AssertDescription: The active runtime access key slot must be enabled.
+  MvpFeaturesRemainDisabled:
+    Assertions:
+      - Assert: !Equals [!Ref AutomatedAbrEnabled, 'false']
+        AssertDescription: Automated ABR is disabled for the MVP.
+      - Assert: !Equals [!Ref AccelerationMode, DISABLED]
+        AssertDescription: Accelerated transcoding is disabled for the MVP.
+
+Conditions:
+  UseDefaultMediaBucketName: !Equals [!Ref MediaBucketName, '']
+
+Resources:
+  CoreTemplateMarker:
+    Type: AWS::CloudFormation::WaitConditionHandle
+
+Outputs:
+  MediaBucketName:
+    Value: pending
+  MediaBucketArn:
+    Value: pending
+  MediaConvertServiceRoleArn:
+    Value: pending
+  VideoHlsJobTemplateName:
+    Value: pending
+  AudioHlsJobTemplateName:
+    Value: pending
+  MediaDistributionId:
+    Value: pending
+  MediaDistributionDomainName:
+    Value: pending
+  MediaKeyGroupId:
+    Value: pending
+  CloudFrontPublicKeyCurrentId:
+    Value: pending
+  CloudFrontPublicKeyNextId:
+    Value: pending
+  RuntimeUserName:
+    Value: pending
+  RuntimeCredentialsSecretArn:
+    Value: pending
