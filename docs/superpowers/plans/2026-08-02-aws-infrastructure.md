@@ -2,11 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build and validate the independent MediaCMS AWS foundation in `us-east-1`: private S3, least-privilege runtime credentials, versioned MediaConvert HLS templates, private CloudFront playback, and CloudWatch observability, then deploy a reviewed dev Stack only after an explicit execution gate.
+**Goal:** Build and validate the minimum independent MediaCMS AWS foundation in `us-east-1`: private S3, least-privilege runtime credentials, MediaConvert HLS templates and private CloudFront playback, then deploy a reviewed dev Stack only after an explicit execution gate.
 
-**Architecture:** One production-safe core CloudFormation template owns storage, IAM, MediaConvert, CloudFront and monitoring. A separate optional certificate template isolates the Cloudflare DNS validation gate. Python contract tests inspect the rendered template semantics; `cfn-lint`, AWS `validate-template`, and a reviewed Change Set form progressively stronger gates before any billable resources are created.
+**Architecture:** One production-safe core CloudFormation template owns only required storage, IAM, MediaConvert and CloudFront resources. Django later reconciles the single active MediaConvert job through `GetJob`; no SNS, CloudWatch alarm/dashboard/custom metric, EventBridge, SQS or monitoring Lambda is provisioned. A separate optional certificate template isolates the Cloudflare DNS validation gate.
 
-**Tech Stack:** AWS CloudFormation YAML, S3, IAM, Secrets Manager, MediaConvert, CloudFront OAC/Key Groups, CloudWatch, Bash, AWS CLI v2, cfn-lint, pytest/PyYAML.
+**Tech Stack:** AWS CloudFormation YAML, S3, IAM, Secrets Manager, MediaConvert, CloudFront OAC/Key Groups, Bash, AWS CLI v2, cfn-lint, pytest/PyYAML.
 
 ## Global Constraints
 
@@ -16,7 +16,7 @@
 - All resources use `Project=mediacms` and `Environment=dev|prod` tags where the resource type supports tags.
 - Runtime credentials use a dedicated IAM User, CloudFormation-managed A/B AccessKeys, and a Secrets Manager Secret. No `SecretAccessKey` appears in Stack Outputs, logs, committed files or command lines.
 - The administrator `default` profile is never copied or mounted into application containers.
-- Runtime permissions are restricted to the MediaCMS bucket/prefixes, MediaConvert jobs/templates, the exact MediaConvert service role, and the MediaCMS CloudWatch namespace.
+- Runtime permissions are restricted to the MediaCMS bucket/prefixes, MediaConvert jobs/templates and the exact MediaConvert service role.
 - S3 remains private. CloudFront OAC is the only playback read path; signed cookies trust the configured Key Group.
 - Production video/audio templates are `mediacms-video-hls-v1` and `mediacms-audio-hls-v1`; dev uses `mediacms-dev-video-hls-v1` and `mediacms-dev-audio-hls-v1`. Application video template version is `h264-hls-qvbr-v1`, H.264 uses `SINGLE_PASS_HQ + QVBR`, and `MaxAverageBitrate` is absent.
 - QVBR ladder is 1080p level 8/max 6,000,000; 720p level 8/max 4,000,000; 480p level 7/max 1,000,000; 360p level 7/max 700,000. Orchestration later removes outputs above source resolution.
@@ -24,6 +24,8 @@
 - Audio template is `mediacms-audio-hls-v1` and produces audio-only Apple HLS.
 - Cloudflare is not required for the default CloudFront domain. Custom ACM/domain deployment remains gated until the real domain and DNS approval are available.
 - Production bucket and credential Secret are retained on Stack deletion. Stack deletion, retained-resource cleanup and old AWS resource cleanup require separate approval.
+- S3 Versioning is not enabled. Attempt-specific immutable keys and `MediaAssetVersion` provide version isolation without retaining complete noncurrent copies of large objects.
+- No SNS, CloudWatch alarm/dashboard/custom metric, EventBridge, SQS or monitoring Lambda resource is created.
 - Large network downloads are not run by Codex. No new package download is required by this plan.
 
 ---
@@ -38,7 +40,7 @@
 
 **Interfaces:**
 - Produces: `load_template(path: str) -> dict`, a PyYAML loader that preserves CloudFormation intrinsic structures sufficiently for semantic assertions.
-- Produces template parameters: `Environment`, `ResourceNamePrefix`, `MediaBucketName`, `ApplicationOrigin`, `RuntimeAccessKeyAEnabled`, `RuntimeAccessKeyBEnabled`, `RuntimeActiveAccessKeySlot`, `CloudFrontPublicKeyCurrent`, `CloudFrontPublicKeyNext`, `EnableCustomDomain`, `MediaDomainName`, `AcmCertificateArn`, `AlarmNotificationEmail`, `AutomatedAbrEnabled`, and `AccelerationMode`.
+- Produces template parameters: `Environment`, `ResourceNamePrefix`, `MediaBucketName`, `ApplicationOrigin`, `RuntimeAccessKeyAEnabled`, `RuntimeAccessKeyBEnabled`, `RuntimeActiveAccessKeySlot`, `CloudFrontPublicKeyCurrent`, `CloudFrontPublicKeyNext`, `EnableCustomDomain`, `MediaDomainName`, `AcmCertificateArn`, `AutomatedAbrEnabled`, and `AccelerationMode`.
 - Produces non-secret outputs: bucket name/ARN, MediaConvert role ARN and template names, CloudFront distribution ID/domain, Key Group/Public Key IDs, runtime user name, and runtime Secret ARN.
 
 - [ ] **Step 1: Write the failing template contract tests**
@@ -61,7 +63,6 @@ def test_core_template_has_required_parameters_and_no_secret_outputs():
         "EnableCustomDomain",
         "MediaDomainName",
         "AcmCertificateArn",
-        "AlarmNotificationEmail",
         "AutomatedAbrEnabled",
         "AccelerationMode",
     }
@@ -160,7 +161,7 @@ git commit -m "test: define aws infrastructure contract"
 Assert observable template properties:
 
 ```python
-def test_bucket_is_private_encrypted_versioned_and_aborts_stale_multipart():
+def test_bucket_is_private_encrypted_unversioned_and_aborts_stale_multipart():
     bucket = load_template(CORE)["Resources"]["MediaBucket"]
     props = bucket["Properties"]
     assert bucket["DeletionPolicy"] == "Retain"
@@ -171,7 +172,7 @@ def test_bucket_is_private_encrypted_versioned_and_aborts_stale_multipart():
         "BlockPublicPolicy": True,
         "RestrictPublicBuckets": True,
     }
-    assert props["VersioningConfiguration"]["Status"] == "Enabled"
+    assert "VersioningConfiguration" not in props
     assert props["BucketEncryption"]["ServerSideEncryptionConfiguration"][0][
         "ServerSideEncryptionByDefault"
     ]["SSEAlgorithm"] == "AES256"
@@ -200,7 +201,7 @@ Expected: FAIL with missing `MediaBucket` or `MediaDistribution`.
 
 - [ ] **Step 3: Implement private storage and playback resources**
 
-Use BucketOwnerEnforced ownership, AES256 default encryption, versioning, public-access blocking and one-day incomplete Multipart cleanup. Do not add public ACLs or public bucket statements.
+Use BucketOwnerEnforced ownership, AES256 default encryption, public-access blocking and one-day incomplete Multipart cleanup. Do not enable S3 Versioning: immutable attempt/version keys provide isolation without retaining complete noncurrent video copies. Do not add public ACLs or public bucket statements.
 
 CloudFront must have exactly one S3 origin, OAC `SigningBehavior=always`, `ViewerProtocolPolicy=redirect-to-https`, HTTP/2+3, IPv6, `PriceClass_100`, compressed caching, GET/HEAD/OPTIONS allowed methods, credentialed CORS response headers, and the Key Group in `TrustedKeyGroups`. The bucket policy grants only `s3:GetObject` to `cloudfront.amazonaws.com` under this distribution's `AWS:SourceArn`.
 
@@ -288,8 +289,9 @@ Runtime S3 permissions:
 - Bucket: `GetBucketLocation`, `ListBucket`, `ListBucketMultipartUploads`, restricted with `s3:prefix` to `uploads/*`, `originals/*`, `candidates/*`, and `system/defaults/*`.
 - Objects: `GetObject`, `PutObject`, `DeleteObject`, `AbortMultipartUpload`, and `ListMultipartUploadParts` only beneath those four prefixes.
 - MediaConvert: `CreateJob`, `GetJob`, `CancelJob`, `GetJobTemplate`, and `DescribeEndpoints`; require request tags `Project=mediacms` and matching `Environment` where AWS supports request-tag conditions.
-- CloudWatch: `PutMetricData` only with `cloudwatch:namespace=MediaCMS/Processing`.
 - IAM: `PassRole` only on `MediaConvertServiceRole` and only to `mediaconvert.amazonaws.com`.
+
+Explicitly deny the design from drifting back to custom monitoring: the Runtime User has no `cloudwatch:PutMetricData`, SNS, EventBridge or SQS permission.
 
 Do not give the runtime user Secrets Manager read access; the administrator extracts the Secret using the deployment profile.
 
@@ -360,7 +362,7 @@ Expected: FAIL because the Job Template resources are absent.
 
 - [ ] **Step 3: Implement both Job Templates**
 
-Use `AWS::MediaConvert::JobTemplate` with `!Sub '${ResourceNamePrefix}-video-hls-v1'` and `!Sub '${ResourceNamePrefix}-audio-hls-v1'`, `Status=ACTIVE`, standard tags and JSON settings. The video template contains one Apple HLS output group with four H.264/AAC variants plus a frame-capture file output group. Frame capture is supplementary, never the only output. The audio template contains one Apple HLS AAC output and no fake video.
+Use `AWS::MediaConvert::JobTemplate` with `!Sub '${ResourceNamePrefix}-video-hls-v1'` and `!Sub '${ResourceNamePrefix}-audio-hls-v1'`, `StatusUpdateInterval=SECONDS_10`, standard tags and JSON settings. `AWS::MediaConvert::JobTemplate` has no `Status` CloudFormation property. The video template contains one Apple HLS output group with four H.264/AAC variants plus a frame-capture file output group. Frame capture is supplementary, never the only output. The audio template contains one Apple HLS AAC output and no fake video.
 
 The static template contains all four video renditions. Document in the resource description that the processing coordinator must remove renditions above probed source resolution before `CreateJob`; the template itself cannot make that per-input decision.
 
@@ -382,59 +384,99 @@ git add infra/aws/mediacms-core.yaml tests/aws_infrastructure/test_mediaconvert_
 git commit -m "feat: add qvbr mediaconvert templates"
 ```
 
-### Task 5: CloudWatch Dashboard, Alerts and Safe Metrics
+### Task 5: Remove AWS Alerting and Minimize Persistent Cost
 
 **Files:**
 - Modify: `infra/aws/mediacms-core.yaml`
-- Create: `tests/aws_infrastructure/test_cloudwatch_contract.py`
+- Modify: `tests/aws_infrastructure/test_core_template_contract.py`
+- Replace: `tests/aws_infrastructure/test_cloudwatch_contract.py`
+- Modify: `docs/superpowers/specs/aws-backend-integration/02-aws-infrastructure-and-storage.md`
+- Modify: `docs/superpowers/specs/aws-backend-integration/04-media-processing-orchestration.md`
+- Modify: `docs/superpowers/specs/aws-backend-integration/07-deployment-and-acceptance.md`
+- Modify: `docs/superpowers/specs/aws-backend-integration/10-test-and-deployment-plan.md`
 
 **Interfaces:**
-- Produces SNS topic `MediaInfrastructureAlerts`, optional email subscription, CloudWatch alarms for MediaConvert errors/cancellations and application timeout metrics, and dashboard `mediacms-${Environment}`.
-- Application namespace is exactly `MediaCMS/Processing`; custom metrics contain identifiers/status counts only, never titles, URLs, cookies or keys.
+- Produces a core Stack with no SNS, CloudWatch alarm/dashboard/custom metric, EventBridge, SQS or monitoring Lambda resource.
+- Removes `AlarmNotificationEmail`, S3 Versioning and Runtime `cloudwatch:PutMetricData` permission.
+- Defers abnormal-job detection to the processing reconciler contract in `2026-08-02-api-polling-cost-minimization-design.md`; this infrastructure task does not implement the reconciler.
 
-- [ ] **Step 1: Write failing observability contract tests**
-
-Assert the template contains:
-
-- `AWS::SNS::Topic` and conditional `AWS::SNS::Subscription`.
-- `AWS::CloudWatch::Alarm` resources for `JobsErroredCount`, `JobsCanceled`, `QueueWaitTimeoutCount`, `ProcessingTimeoutCount`, `BlackVideoDetected`, and `VideoPaddingInserted`.
-- A dashboard body containing widgets for `StandbyTime`, `TranscodingTime`, SD/HD/UHD/audio output duration, QVBR quality, black video and padding.
-- Black/padding alarms only notify; no Lambda, EventBridge target or automatic task-failure resource exists.
+- [ ] **Step 1: Replace positive monitoring tests with failing absence and cost-boundary tests**
 
 ```python
-def test_quality_alarms_are_warning_only():
+FORBIDDEN_RESOURCE_PREFIXES = (
+    "AWS::SNS::",
+    "AWS::CloudWatch::",
+    "AWS::Events::",
+    "AWS::SQS::",
+)
+
+
+def test_core_stack_has_no_aws_alerting_or_custom_monitoring_resources():
     template = load_template(CORE)
-    quality = [template["Resources"][name] for name in ("BlackVideoAlarm", "VideoPaddingAlarm")]
-    assert all(item["Type"] == "AWS::CloudWatch::Alarm" for item in quality)
-    assert not any(resource["Type"] in {"AWS::Lambda::Function", "AWS::Events::Rule"} for resource in template["Resources"].values())
+    resource_types = [resource["Type"] for resource in template["Resources"].values()]
+    assert not any(
+        resource_type.startswith(FORBIDDEN_RESOURCE_PREFIXES)
+        for resource_type in resource_types
+    )
+    assert "AlarmNotificationEmail" not in template["Parameters"]
+
+
+def test_runtime_has_no_cloudwatch_metric_write_permission():
+    statements = runtime_policy_statements(load_template(CORE))
+    actions = {
+        action
+        for statement in statements
+        for action in as_list(statement["Action"])
+    }
+    assert "cloudwatch:PutMetricData" not in actions
+
+
+def test_large_media_bucket_does_not_retain_noncurrent_object_versions():
+    bucket = load_template(CORE)["Resources"]["MediaBucket"]
+    assert "VersioningConfiguration" not in bucket["Properties"]
+    assert bucket["Properties"]["LifecycleConfiguration"]["Rules"][0][
+        "AbortIncompleteMultipartUpload"
+    ]["DaysAfterInitiation"] == 1
 ```
 
-- [ ] **Step 2: Run tests and observe missing monitoring resources**
-
-Run: `.venv/bin/pytest tests/aws_infrastructure/test_cloudwatch_contract.py -q`
-
-Expected: FAIL with missing dashboard/alarms.
-
-- [ ] **Step 3: Implement monitoring resources**
-
-Use AWS/MediaConvert metrics only according to their actual publication semantics. Real-time queue/processing timeout alarms use `MediaCMS/Processing` custom counters published later by the reconciler; do not pretend completed-job metrics provide live timeout detection. Set missing data to `notBreaching` for sparse development workloads. Add standard Project/Environment tags to SNS where supported.
-
-- [ ] **Step 4: Run tests and lint**
+- [ ] **Step 2: Run focused tests and verify they fail against the previously implemented resources**
 
 Run:
 
 ```bash
-.venv/bin/pytest tests/aws_infrastructure/test_cloudwatch_contract.py -q
-cfn-lint infra/aws/mediacms-core.yaml
+.venv/bin/pytest \
+  tests/aws_infrastructure/test_cloudwatch_contract.py \
+  tests/aws_infrastructure/test_core_template_contract.py \
+  -q
 ```
 
-Expected: PASS.
+Expected: FAIL because monitoring resources, the email parameter, S3 Versioning and `cloudwatch:PutMetricData` still exist.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 3: Remove resources, parameter, condition and permission**
+
+Delete `AlarmNotificationEmail`, `HasAlarmNotificationEmail`, `MediaInfrastructureAlerts`, `MediaInfrastructureEmailSubscription`, all six alarms and `MediaInfrastructureDashboard`. Delete only the `PublishProcessingMetrics` IAM statement. Remove `VersioningConfiguration` while preserving bucket retention, encryption, Block Public Access and one-day incomplete multipart cleanup.
+
+- [ ] **Step 4: Update modular design and acceptance documents**
+
+Replace CloudWatch/SNS promises with the exact MediaConvert `GetJob` reconciliation boundary: five provider states, adaptive polling, deduplicated in-site warnings, sanitized errors and no automatic black/padding detection. Remove CloudWatch capability checks from deployment and credential rotation; retain S3 and MediaConvert positive/negative checks.
+
+- [ ] **Step 5: Run infrastructure tests and lint**
+
+Run:
 
 ```bash
-git add infra/aws/mediacms-core.yaml tests/aws_infrastructure/test_cloudwatch_contract.py
-git commit -m "feat: add aws media observability"
+.venv/bin/pytest tests/aws_infrastructure -q
+cfn-lint infra/aws/mediacms-core.yaml infra/aws/mediacms-certificate.yaml
+git diff --check
+```
+
+Expected: PASS. The core template remains below 51,200 bytes and contains no forbidden monitoring resources.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add infra/aws/mediacms-core.yaml tests/aws_infrastructure docs/superpowers/specs/aws-backend-integration
+git commit -m "refactor: replace aws alerts with api reconciliation"
 ```
 
 ### Task 6: Optional ACM Certificate Stack and Cloudflare Gate
@@ -523,7 +565,7 @@ All scripts start with `#!/usr/bin/env bash` and `set -euo pipefail`, validate p
 Document the initial A slot and exact rotation sequence:
 
 1. Change Set: A=true, B=true, Active=A.
-2. Change Set: A=true, B=true, Active=B; extract env, restart Web/Worker, verify S3/MediaConvert/CloudWatch, observe.
+2. Change Set: A=true, B=true, Active=B; extract env, restart Web/Worker, verify S3 and MediaConvert API access, observe.
 3. Change Set: A=false, B=true, Active=B.
 4. Reverse A/B for the next rotation.
 
@@ -651,7 +693,7 @@ Run the sanitized describe script. Confirm only MediaCMS resources are created, 
 
 - [ ] **Step 5: Stop for explicit administrator approval**
 
-Report the Change Set name, resource-type/action summary, estimated cost-bearing resources (CloudFront, MediaConvert usage-only templates, CloudWatch/SNS/Secrets Manager, S3 storage), and that execution creates a long-term IAM AccessKey. Do not run `execute-change-set` until the administrator explicitly approves this exact Change Set.
+Report the Change Set name, resource-type/action summary, estimated cost-bearing resources (CloudFront usage, MediaConvert job usage, Secrets Manager and S3 storage), and that execution creates a long-term IAM AccessKey. Explicitly confirm that no SNS, CloudWatch alarm/dashboard/custom metric, EventBridge or SQS resource is present. Do not run `execute-change-set` until the administrator explicitly approves this exact Change Set.
 
 ### Task 10: Execute and Verify the Dev Stack After Approval
 
@@ -677,11 +719,11 @@ The concrete Change Set name must be copied from the approval; never use a wildc
 
 - [ ] **Step 2: Verify non-secret Stack outputs and resource configuration**
 
-Use read-only `describe-stacks`, `get-template`, S3 encryption/versioning/public-access/CORS/lifecycle calls, CloudFront distribution/OAC/key-group calls, MediaConvert `get-job-template`, CloudWatch alarm/dashboard calls, and IAM policy reads. Do not print Secret values.
+Use read-only `describe-stacks`, `get-template`, S3 encryption/public-access/CORS/lifecycle calls, CloudFront distribution/OAC/key-group calls, MediaConvert `get-job-template`, and IAM policy reads. Confirm S3 Versioning is not enabled and no monitoring resources exist. Do not print Secret values.
 
 - [ ] **Step 3: Extract dev runtime credentials safely and run positive capability checks**
 
-Extract to a protected dev-only env file. In a disposable shell that sources that file, verify bucket location/list for permitted prefixes, a small tagged object PUT/HEAD/DELETE beneath an exact dev test prefix, MediaConvert template reads, and CloudWatch `PutMetricData` to `MediaCMS/Processing`. Delete only the exact test object key created by this step.
+Extract to a protected dev-only env file. In a disposable shell that sources that file, verify bucket location/list for permitted prefixes, a small tagged object PUT/HEAD/DELETE beneath an exact dev test prefix, and MediaConvert template reads. Delete only the exact test object key created by this step. Do not test CloudWatch custom metrics because the runtime has no CloudWatch write permission.
 
 - [ ] **Step 4: Run negative least-privilege checks**
 
@@ -706,11 +748,11 @@ The AWS infrastructure plan is complete only when:
 
 - Core and certificate templates pass pytest semantic contracts, cfn-lint and AWS validate-template.
 - The reviewed dev Change Set contains only independent `mediacms-*` resources and is explicitly approved before execution.
-- The private bucket has encryption, versioning, Block Public Access, constrained CORS and Multipart cleanup.
+- The private bucket has encryption, Block Public Access, constrained CORS and Multipart cleanup, with S3 Versioning intentionally absent.
 - CloudFront uses OAC, an S3 source-ARN bucket policy and a trusted Key Group; S3 and unsigned viewer access are denied.
 - Runtime A/B credential rules reject invalid slot combinations, the Secret is retained, and no secret appears in Outputs/logs/repository.
-- Runtime credentials pass permitted S3/MediaConvert/CloudWatch operations and fail cross-project, IAM, CloudFormation and Secrets Manager operations.
+- Runtime credentials pass permitted S3/MediaConvert operations and fail cross-project, IAM, CloudFormation, Secrets Manager and CloudWatch metric-write operations.
 - Video/audio Job Templates match the fixed HLS/QVBR/AUTO-rotation contract with Automated ABR and acceleration disabled.
-- CloudWatch dashboard/alarms exist and black/padding signals remain warning-only.
+- No SNS, CloudWatch alarm/dashboard/custom metric, EventBridge, SQS or monitoring Lambda resource exists; abnormal-job alerts are owned by the later `GetJob` reconciler implementation.
 - Cloudflare/ACM custom-domain resources remain undeployed until the external DNS gate is explicitly opened.
 - No existing `/home/caoyujie/projects/cyj/media-platform` AWS resource is modified or deleted.
