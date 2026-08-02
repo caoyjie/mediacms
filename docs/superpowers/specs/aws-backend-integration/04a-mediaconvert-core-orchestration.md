@@ -119,7 +119,7 @@ flowchart TD
 
 新增 `AttemptArtifact` 保存Attempt产生或接管的精确S3 Key、用途、大小、checksum和cleanup状态。原件提升时登记upload暂存Key与original Key；MediaConvert COMPLETE后允许列举仅由服务端生成的本Attempt candidate前缀，把所有结果先登记为Artifact，再从manifest闭包选择可发布的业务Asset。未知或多余对象不进入 `MediaAssetVersion`，但作为cleanup-only Artifact保留精确删除证据。这里的List只做受管Attempt输出盘点，不能通过扫描Bucket推断Media或版本归属。
 
-验证后创建candidate `MediaAssetVersion`，逐项登记精确 `MediaAsset`。发布事务锁定Media、Job、Attempt和candidate，复核未取消，再调用既有原子激活逻辑：旧active转retired、candidate转active、一次更新active指针并把Media置ready。事务失败时旧active不变。
+验证后创建candidate `MediaAssetVersion`，逐项登记精确 `MediaAsset`。发布事务锁定Media、Job、Attempt和candidate，复核未取消，再调用既有原子激活逻辑：旧active转retired、candidate转active、一次更新active指针并把Media置ready；同时投影兼容的 `encoding_status=success` 和 `hls_file=manifest_key`。事务失败时旧active不变。
 
 ## 7. 清理
 

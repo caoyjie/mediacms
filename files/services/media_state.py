@@ -108,10 +108,14 @@ def activate_asset_version(media_id: int, version_id: UUID) -> Media:
         active_asset_version=candidate,
         processing_status=MediaProcessingStatus.READY,
         encoding_status=encoding_status_for(MediaProcessingStatus.READY),
+        hls_file=candidate.manifest_key,
+        listable=bool(media.state == "public" and media.is_reviewed),
     )
     media.active_asset_version_id = candidate.id
     media.processing_status = MediaProcessingStatus.READY
     media.encoding_status = encoding_status_for(MediaProcessingStatus.READY)
+    media.hls_file = candidate.manifest_key
+    media.listable = bool(media.state == "public" and media.is_reviewed)
     return media
 
 
