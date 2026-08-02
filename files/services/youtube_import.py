@@ -12,11 +12,12 @@ import tempfile
 from django.conf import settings
 from django.utils import timezone
 
-from files.models import AttemptArtifact, MediaJobCheckpoint
+from files.models import AttemptArtifact, MediaJobCheckpoint, MediaIngestionJob
 from files.models.ingestion import ArtifactCleanupStatus, ArtifactPurpose, CheckpointStatus
 from files.services.processing_storage import ObjectEvidence
 from files.services.youtube import extract_info, download_source
 from files.services.youtube_cookies import materialize_cookie
+from files.services.youtube_cookies import latest_cookie
 
 
 @dataclass(frozen=True, slots=True)
@@ -79,3 +80,51 @@ def subtitle_checkpoint(attempt, *, status, evidence=None, now=None):
         name="subtitles",
         defaults={"status": status, "evidence": evidence or {}, "completed_at": now or timezone.now()},
     )[0]
+
+
+def run_youtube_step(attempt, *, now=None):
+    """Run one bounded YouTube checkpoint operation for the global queue."""
+    now = now or timezone.now()
+    url = (attempt.job.source_metadata or {}).get("url")
+    if not url:
+        raise ValueError("YouTube job has no source URL")
+    cookie_id = (attempt.job.source_metadata or {}).get("cookie_version_id")
+    cookie = None
+    if cookie_id:
+        from files.models import YouTubeCookieVersion
+        cookie = YouTubeCookieVersion.objects.filter(pk=cookie_id, status="active").first()
+    else:
+        cookie = latest_cookie()
+    metadata_checkpoint = MediaJobCheckpoint.objects.filter(attempt=attempt, name="metadata").first()
+    if metadata_checkpoint is None:
+        try:
+            metadata, info = discover(url, cookie_version=cookie)
+        except Exception as error:
+            kind = getattr(error, "kind", "unknown")
+            action = "cookies" if kind == "cookies" else "retry" if kind == "retryable" else "review"
+            attempt.status = "failed"
+            attempt.diagnostic_error = "YouTube download requires updated cookies." if action == "cookies" else "YouTube metadata discovery failed."
+            attempt.save(update_fields=("status", "diagnostic_error", "updated_at"))
+            MediaIngestionJob.objects.filter(pk=attempt.job_id).update(status="failed", stage="action_required" if action == "cookies" else "failed", safe_error=attempt.diagnostic_error)
+            return "failed"
+        MediaJobCheckpoint.objects.create(
+            attempt=attempt, name="metadata", status="completed",
+            evidence={"video_id": metadata.video_id, "title": metadata.title, "duration": metadata.duration, "thumbnail": metadata.thumbnail},
+            completed_at=now,
+        )
+        if attempt.job.media and not (attempt.job.media.metadata_sources or {}).get("title"):
+            attempt.job.media.title = metadata.title
+            attempt.job.media.description = metadata.description
+            attempt.job.media.duration = metadata.duration
+            attempt.job.media.metadata_sources = {"title": "youtube", "description": "youtube", "duration": "youtube"}
+            attempt.job.media.save(update_fields=("title", "description", "duration", "metadata_sources", "edit_date"))
+        return "metadata"
+    source_checkpoint = MediaJobCheckpoint.objects.filter(attempt=attempt, name="source_verified").first()
+    if source_checkpoint is None:
+        download_to_attempt(attempt, url, cookie_version=cookie, now=now)
+        return "download"
+    subtitle = MediaJobCheckpoint.objects.filter(attempt=attempt, name="subtitles").first()
+    if subtitle is None:
+        subtitle_checkpoint(attempt, status=CheckpointStatus.UNAVAILABLE, evidence={"reason": "subtitle fetch is optional"}, now=now)
+        return "subtitles"
+    return "ready"

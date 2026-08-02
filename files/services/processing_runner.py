@@ -1,5 +1,4 @@
 from dataclasses import asdict, dataclass
-from datetime import timedelta
 
 from django.conf import settings
 from django.db.models import Q
@@ -29,6 +28,7 @@ from files.services.processing_submission import (
     submit_prepared,
 )
 from files.services.output_verification import verify_mediaconvert_outputs
+from files.services.youtube_import import run_youtube_step
 
 
 @dataclass(frozen=True, slots=True)
@@ -74,7 +74,7 @@ def _attempt_for_lease(acquisition):
 def _schedule_for(action):
     if action in {"poll", "wait", "cancel_requested"}:
         return 10
-    if action in {"cleanup", "publish", "verify_outputs", "submit", "prepare_submission", "probe"}:
+    if action in {"cleanup", "publish", "verify_outputs", "submit", "prepare_submission", "probe", "youtube_metadata", "youtube_download", "youtube_subtitles"}:
         return 0
     return None
 
@@ -95,6 +95,11 @@ def _run_action(attempt, media_gateway, storage_gateway, now):
             return "cancel_requested", False
         request_attempt_cancel(attempt.id, media_gateway, now=now)
         return "cancel_requested", False
+
+    if job.source_type == "youtube":
+        youtube_action = run_youtube_step(attempt, now=now)
+        if youtube_action != "ready":
+            return f"youtube_{youtube_action}", youtube_action == "failed"
 
     source_verified = _checkpoint(attempt, "source_verified")
     if source_verified is None:
@@ -165,9 +170,9 @@ def run_processing_tick(owner_token: str, now=None):
     media_gateway = MediaConvertGateway()
     storage_gateway = ProcessingStorageGateway()
     action, terminal = _run_action(attempt, media_gateway, storage_gateway, now)
-    if action == "done":
+    if action == "done" or terminal:
         release_lease(owner_token)
-        return TickResult(action, str(acquisition.job_id), str(acquisition.attempt_id), None, True)
+        return TickResult(action, str(acquisition.job_id), str(acquisition.attempt_id), None, terminal or action == "done")
     heartbeat_lease(owner_token, _lease_seconds(), now=now)
     delay = _schedule_for(action)
     return TickResult(
