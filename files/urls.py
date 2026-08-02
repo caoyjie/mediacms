@@ -52,6 +52,12 @@ urlpatterns = [
     re_path(r"^view", views.view_media, name="get_media"),
     re_path(r"^upload", views.upload_media, name="upload_media"),
     # API VIEWS
+    path("api/v1/aws/uploads/", views.UploadCollectionView.as_view()),
+    path("api/v1/aws/uploads/<uuid:session_id>/", views.UploadDetailView.as_view()),
+    path(
+        "api/v1/aws/uploads/<uuid:session_id>/lease/acquire/",
+        views.UploadLeaseAcquireView.as_view(),
+    ),
     re_path(r"^api/v1/media/user/bulk_actions$", views.MediaBulkUserActions.as_view()),
     re_path(r"^api/v1/media/user/bulk_actions/$", views.MediaBulkUserActions.as_view()),
     re_path(r"^api/v1/media$", views.MediaList.as_view()),
