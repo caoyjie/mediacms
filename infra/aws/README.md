@@ -58,3 +58,18 @@ Validated on 2026-08-02 in `us-east-1` without creating a Stack:
 - Certificate template SHA-256: `3e0a93bdbc47a35a9a07cbebd3565a161775638a16622ce5fdfc1677aec83973`.
 
 Bucket availability is time-sensitive and must be checked again immediately before creating the initial Change Set.
+
+## Dev deployment evidence
+
+The `mediacms-dev` Stack reached `CREATE_COMPLETE` on 2026-08-02 after the exact reviewed Change Set `mediacms-dev-retry-20260802T025044Z` was approved. Validation recorded only non-secret conclusions:
+
+- All 15 expected S3, IAM, Secrets Manager, MediaConvert and CloudFront resources reached `CREATE_COMPLETE`.
+- The Bucket uses SSE-S3 (`AES256`), Bucket-owner-enforced ownership, all four Block Public Access controls, the approved upload CORS contract and one-day incomplete multipart cleanup. S3 Versioning remains disabled.
+- The CloudFront Distribution is deployed with OAC and one trusted Key Group. Anonymous direct S3 access and unsigned CloudFront access both returned `403`.
+- The runtime identity can use only the approved media prefixes, read both MediaConvert Job Templates and discover the MediaConvert endpoint. The exact verification object was deleted and no verification object remains.
+- Runtime requests for an unauthorized key, unrelated Bucket, IAM management, CloudFormation listing, Secrets Manager retrieval and CloudWatch metric writes were denied.
+- IAM policy simulation allows `iam:PassRole` only for the Stack's exact MediaConvert service Role; a different Role is implicitly denied.
+- The Stack contains no SNS, CloudWatch alarm/dashboard, custom metric, EventBridge, SQS or monitoring Lambda resource.
+- The protected dev runtime env is installed outside the repository with owner `root`, group `caoyujie` and mode `0640`; its values were not printed or committed.
+
+The optional ACM/custom-domain Stack remains undeployed until the Cloudflare DNS gate is opened.

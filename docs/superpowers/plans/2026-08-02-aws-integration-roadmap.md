@@ -13,7 +13,7 @@
 | 顺序 | 计划 | 独立交付物 | 外部阻塞 |
 | ---: | --- | --- | --- |
 | 1 | ✅ Domain foundation（完成） | Media兼容字段、Job/Attempt/Checkpoint、AssetVersion、FIFO Lease、唯一管理员 | 无 |
-| 2 | AWS infrastructure | 最小化S3/IAM/CloudFront/MediaConvert模板、dev Stack | ACM自定义域名部分等待实际域名 |
+| 2 | ✅ AWS infrastructure（完成） | 最小化S3/IAM/CloudFront/MediaConvert模板、dev Stack | ACM自定义域名部分等待实际域名 |
 | 3 | Browser ingestion | Multipart API、恢复对账、HLS ZIP对象清单和上传租约 | 无 |
 | 4 | Processing orchestration | 来源检查点执行器、MediaConvert协调、原子激活、取消和cleanup | 依赖AWS dev Stack |
 | 5 | YouTube and subtitles | yt-dlp、加密Cookie、三轨WebVTT、无字幕和Resume | 依赖S3与编排 |
@@ -48,4 +48,4 @@
 
 ## 当前执行入口
 
-Domain foundation 已通过空库迁移、模型约束、故障恢复和 legacy pipeline guard 验证。下一步编写并执行 AWS infrastructure 计划。
+Domain foundation 和 AWS infrastructure 已完成验证。`mediacms-dev` Stack 已部署，私有 S3、最小权限 Runtime IAM、版本化 MediaConvert Job Templates、CloudFront OAC/Key Group 和受保护运行时凭证通过正向与反向能力检查；没有部署 AWS 告警资源。下一步实施 Browser ingestion，ACM 自定义域名继续等待 Cloudflare 外部门禁且不阻塞开发。
