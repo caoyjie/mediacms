@@ -4,6 +4,17 @@ from .category import Category, Tag  # noqa: F401
 from .comment import Comment  # noqa: F401
 from .domain import DeletionStatus, MediaProcessingStatus, StorageBackend, encoding_status_for  # noqa: F401
 from .encoding import EncodeProfile, Encoding  # noqa: F401
+from .ingestion import (  # noqa: F401
+    AttemptStatus,
+    CheckpointStatus,
+    CleanupStatus,
+    JobSourceType,
+    JobStatus,
+    MediaIngestionJob,
+    MediaJobAttempt,
+    MediaJobCheckpoint,
+    ProcessingLease,
+)
 from .license import License  # noqa: F401
 from .media import EmbedMediaCourse, Media, MediaPermission  # noqa: F401
 from .page import Page, TinyMCEMedia  # noqa: F401

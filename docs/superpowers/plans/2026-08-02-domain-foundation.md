@@ -218,14 +218,14 @@ git commit -m "feat: add versioned media assets"
 **Files:**
 - Create: `files/models/ingestion.py`
 - Modify: `files/models/__init__.py`
-- Modify: `files/migrations/0021_aws_domain_foundation.py` by regenerating before sharing
+- Create: `files/migrations/0023_ingestion_models.py`; committed migrations `0021` and `0022` must not be rewritten
 - Create: `tests/aws_domain/test_ingestion_models.py`
 
 **Interfaces:**
 - Produces: `MediaIngestionJob`, `MediaJobAttempt`, `MediaJobCheckpoint`, `ProcessingLease` and their `TextChoices`.
 - Produces: chronological `MediaIngestionJob.objects.queued()` ordering by `(queued_at, id)`.
 
-- [ ] **Step 1: Write failing constraint and ordering tests**
+- [x] **Step 1: Write failing constraint and ordering tests**
 
 ```python
 import pytest
@@ -252,34 +252,34 @@ def test_processing_lease_is_a_singleton_row():
         ProcessingLease.objects.create(singleton_key="default")
 ```
 
-- [ ] **Step 2: Run tests and verify model imports fail**
+- [x] **Step 2: Run tests and verify model imports fail**
 
 Run: `pytest tests/aws_domain/test_ingestion_models.py -q`
 
 Expected: FAIL importing the new ingestion models.
 
-- [ ] **Step 3: Implement persistence models and explicit indexes**
+- [x] **Step 3: Implement persistence models and explicit indexes**
 
-Use UUID primary keys for Job and Attempt. Job fields: protected nullable Media FK plus `media_title_snapshot`, `source_type=upload|hls_zip|youtube`, `status`, `stage`, decimal `progress` constrained to `0..100`, `cancel_requested`, independent `cleanup_status`, JSON `source_metadata`, `safe_error`, `queued_at`, timestamps, and an index on `(status, queued_at, id)`. Attempt fields match the approved spec and include unique `(job, sequence)`. Diagnostic errors never appear in `__str__`. Add nullable `MediaAssetVersion.attempt=OneToOneField(MediaJobAttempt, SET_NULL, related_name="asset_version")` now that both model classes exist.
+Use UUID primary keys for Job and Attempt. Job fields: nullable Media FK with `SET_NULL` plus `media_title_snapshot`, `source_type=upload|hls_zip|youtube`, `status`, `stage`, decimal `progress` constrained to `0..100`, `cancel_requested`, independent `cleanup_status`, JSON `source_metadata`, `safe_error`, `queued_at`, timestamps, and an index on `(status, queued_at, id)`. `SET_NULL` is required so audit history survives eventual Media deletion. Attempt fields match the approved spec and include unique `(job, sequence)`. Diagnostic errors never appear in `__str__`. Add nullable `MediaAssetVersion.attempt=OneToOneField(MediaJobAttempt, SET_NULL, related_name="asset_version")` now that both model classes exist.
 
 Checkpoint fields: Attempt FK, `name`, `status=pending|completed|available|unavailable|failed_retryable`, `input_fingerprint`, JSON `evidence`, `completed_at`, timestamps, and unique `(attempt, name)`. ProcessingLease uses primary-key `singleton_key="default"`, nullable protected Job/Attempt FKs, `owner_token`, `heartbeat_at`, and `expires_at`.
 
-- [ ] **Step 4: Regenerate and inspect the files migration**
+- [x] **Step 4: Generate and inspect the files migration**
 
-Run: `python manage.py makemigrations files --name aws_domain_foundation`
+Run: `python manage.py makemigrations files --name ingestion_models`
 
 Expected: one coherent migration with enums materialized as field choices, named constraints/indexes, and no AWS calls.
 
-- [ ] **Step 5: Run all domain model tests**
+- [x] **Step 5: Run all domain model tests**
 
 Run: `pytest tests/aws_domain/test_ingestion_models.py tests/aws_domain/test_media_assets.py tests/aws_domain/test_media_processing_state.py -q`
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
-git add files/models/ingestion.py files/models/__init__.py files/migrations/0021_aws_domain_foundation.py tests/aws_domain/test_ingestion_models.py
+git add files/models/ingestion.py files/models/assets.py files/models/__init__.py files/migrations/0023_ingestion_models.py tests/aws_domain/test_ingestion_models.py
 git commit -m "feat: add ingestion persistence models"
 ```
 

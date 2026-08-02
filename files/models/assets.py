@@ -15,6 +15,13 @@ class MediaAssetVersion(models.Model):
         on_delete=models.PROTECT,
         related_name="asset_versions",
     )
+    attempt = models.OneToOneField(
+        "MediaJobAttempt",
+        on_delete=models.SET_NULL,
+        related_name="asset_version",
+        blank=True,
+        null=True,
+    )
     status = models.CharField(
         max_length=20,
         choices=Status.choices,
