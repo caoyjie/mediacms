@@ -200,6 +200,13 @@ AWS_MEDIA_BUCKET = os.environ.get("AWS_MEDIA_BUCKET", "")
 AWS_REGION = os.environ.get("AWS_REGION", "us-east-1")
 AWS_UPLOAD_PRESIGN_TTL_SECONDS = int(os.environ.get("AWS_UPLOAD_PRESIGN_TTL_SECONDS", "900"))
 AWS_UPLOAD_PART_SIZE = int(os.environ.get("AWS_UPLOAD_PART_SIZE", str(16 * 1024 * 1024)))
+AWS_PROCESSING_PRESIGN_TTL_SECONDS = int(
+    os.environ.get("AWS_PROCESSING_PRESIGN_TTL_SECONDS", "300")
+)
+AWS_MANIFEST_MAX_BYTES = int(os.environ.get("AWS_MANIFEST_MAX_BYTES", str(1024 * 1024)))
+AWS_CANDIDATE_LIST_MAX_OBJECTS = int(
+    os.environ.get("AWS_CANDIDATE_LIST_MAX_OBJECTS", "10000")
+)
 
 # these used to be os.path.join(MEDIA_ROOT, "folder/") but update to
 # Django 3.1.9 requires not absolute paths to be utilized...
