@@ -5,6 +5,7 @@ from rest_framework.views import APIView
 
 from files.models import BrowserUploadSession
 from files.services.hls_package import HlsInventoryEntry
+from files.services.processing_storage import ProcessingStorageGateway
 from files.services.s3_uploads import S3UploadGateway
 from files.services.upload_lease import (
     UploadLeaseConflict,
@@ -38,6 +39,10 @@ from users.permissions import IsSiteAdministrator
 
 def _gateway():
     return S3UploadGateway()
+
+
+def _processing_storage():
+    return ProcessingStorageGateway()
 
 
 class StrictSerializer(serializers.Serializer):
@@ -337,6 +342,7 @@ class UploadCompleteView(APIView):
                     headers[0],
                     headers[2],
                     _gateway(),
+                    _processing_storage(),
                 )
         except (
             InvalidUploadCommand,

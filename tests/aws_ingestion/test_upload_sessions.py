@@ -12,6 +12,7 @@ from files.models import (
 )
 from files.models.uploads import BrowserUploadPart
 from files.services.processing_queue import acquire_head_job
+from files.services.processing_storage import ObjectEvidence
 from files.services.s3_uploads import PresignedRequest, S3ObjectEvidence, S3Part
 from files.services.upload_lease import UploadLeaseConflict, acquire_upload_lease
 from files.services.upload_sessions import (
@@ -76,6 +77,24 @@ class RecordingUploadGateway:
         self.delete_calls.append(tuple(keys))
 
 
+class RecordingPromotionStorage:
+    def __init__(self):
+        self.copy_calls = []
+        self.head_calls = []
+
+    def copy_exact(self, source_key, destination_key):
+        self.copy_calls.append((source_key, destination_key))
+
+    def head_exact(self, key):
+        self.head_calls.append(key)
+        return ObjectEvidence(
+            key=key,
+            size=32_000_000,
+            content_type="video/mp4",
+            checksum_sha256="promoted-checksum",
+        )
+
+
 @pytest.fixture
 def administrator(db):
     return UserFactory(is_staff=True, is_superuser=True)
@@ -84,6 +103,11 @@ def administrator(db):
 @pytest.fixture
 def gateway():
     return RecordingUploadGateway()
+
+
+@pytest.fixture
+def promotion_storage():
+    return RecordingPromotionStorage()
 
 
 @pytest.fixture
@@ -300,6 +324,7 @@ def authoritative_parts():
 def test_completion_uses_s3_evidence_and_only_queues_processing(
     administrator,
     gateway,
+    promotion_storage,
     file_command,
 ):
     created = create_file_session(administrator, file_command, gateway)
@@ -319,6 +344,7 @@ def test_completion_uses_s3_evidence_and_only_queues_processing(
         "complete-file-1",
         expected_revision=3,
         gateway=gateway,
+        promotion_storage=promotion_storage,
     )
 
     session = BrowserUploadSession.objects.get(pk=created.session_id)
@@ -339,9 +365,10 @@ def test_completion_uses_s3_evidence_and_only_queues_processing(
     assert checkpoint.status == "completed"
     assert checkpoint.evidence == {
         "object_id": str(upload_object.id),
+        "s3_key": upload_object.promoted_s3_key,
         "size": 32_000_000,
         "content_type": "video/mp4",
-        "checksum_sha256": "composite-checksum-2",
+        "checksum_sha256": "promoted-checksum",
     }
     assert len(gateway.complete_calls) == 1
     assert acquire_head_job("processing-worker", 60).job_id == job.id
@@ -351,6 +378,7 @@ def test_completion_uses_s3_evidence_and_only_queues_processing(
 def test_completion_retry_returns_same_result_without_active_upload_lease(
     administrator,
     gateway,
+    promotion_storage,
     file_command,
 ):
     created = create_file_session(administrator, file_command, gateway)
@@ -369,6 +397,7 @@ def test_completion_retry_returns_same_result_without_active_upload_lease(
         "complete-file-1",
         3,
         gateway,
+        promotion_storage,
     )
     second = complete_file_upload(
         created.session_id,
@@ -376,6 +405,7 @@ def test_completion_retry_returns_same_result_without_active_upload_lease(
         "complete-file-1",
         3,
         gateway,
+        promotion_storage,
     )
 
     assert second == first
@@ -386,6 +416,7 @@ def test_completion_retry_returns_same_result_without_active_upload_lease(
 def test_completion_resumes_with_head_only_after_post_complete_interruption(
     administrator,
     gateway,
+    promotion_storage,
     file_command,
 ):
     created = create_file_session(administrator, file_command, gateway)
@@ -401,6 +432,7 @@ def test_completion_resumes_with_head_only_after_post_complete_interruption(
             "complete-file-1",
             3,
             gateway,
+            promotion_storage,
         )
 
     interrupted = BrowserUploadSession.objects.get(pk=created.session_id)
@@ -419,6 +451,7 @@ def test_completion_resumes_with_head_only_after_post_complete_interruption(
         "complete-file-1",
         4,
         gateway,
+        promotion_storage,
     )
 
     assert resumed.status == "completed"
@@ -429,6 +462,7 @@ def test_completion_resumes_with_head_only_after_post_complete_interruption(
 def test_completion_rejects_stale_revision_and_size_mismatch(
     administrator,
     gateway,
+    promotion_storage,
     file_command,
 ):
     created = create_file_session(administrator, file_command, gateway)
@@ -443,6 +477,7 @@ def test_completion_rejects_stale_revision_and_size_mismatch(
             "complete-file-1",
             2,
             gateway,
+            promotion_storage,
         )
 
     gateway.parts = (authoritative_parts()[0],)
@@ -453,6 +488,7 @@ def test_completion_rejects_stale_revision_and_size_mismatch(
             "complete-file-1",
             3,
             gateway,
+            promotion_storage,
         )
     assert gateway.complete_calls == []
 

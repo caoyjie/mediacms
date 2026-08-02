@@ -3,11 +3,13 @@ from math import ceil
 from pathlib import PurePosixPath
 from uuid import UUID
 
+from botocore.exceptions import ClientError
 from django.db import models, transaction
 from django.utils import timezone
 from django.utils.html import strip_tags
 
 from files.models import (
+    AttemptArtifact,
     BrowserUploadObject,
     BrowserUploadPart,
     BrowserUploadSession,
@@ -17,12 +19,19 @@ from files.models import (
     MediaJobCheckpoint,
 )
 from files.models.domain import StorageBackend
-from files.models.ingestion import AttemptStatus, CheckpointStatus, JobStatus
+from files.models.ingestion import (
+    ArtifactPurpose,
+    AttemptStatus,
+    CheckpointStatus,
+    JobStatus,
+)
 from files.models.uploads import (
     BrowserUploadObjectStatus,
     BrowserUploadStatus,
     BrowserUploadStrategy,
+    PromotionStatus,
 )
+from files.services.processing_storage import ObjectEvidence
 from files.services.hls_package import (
     MAX_HLS_FILES,
     MAX_HLS_TOTAL_SIZE,
@@ -532,15 +541,150 @@ def _verify_completed_object(upload_object, evidence):
         raise UploadVerificationFailed("Completed S3 object checksum is unavailable.")
 
 
+def _record_completed_upload(session_id, upload_object_id, evidence):
+    with transaction.atomic():
+        session = BrowserUploadSession.objects.select_for_update().select_related("job").get(pk=session_id)
+        upload_object = BrowserUploadObject.objects.select_for_update().get(pk=upload_object_id)
+        upload_object.status = BrowserUploadObjectStatus.VERIFIED
+        upload_object.checksum = evidence.checksum_sha256
+        upload_object.save(update_fields=("status", "checksum", "updated_at"))
+        attempt, _ = MediaJobAttempt.objects.get_or_create(
+            job=session.job,
+            sequence=1,
+            defaults={"status": AttemptStatus.QUEUED},
+        )
+        return attempt
+
+
+def _promotion_destination(session, upload_object, attempt):
+    suffix = PurePosixPath(upload_object.relative_path).suffix.lower()
+    if not suffix:
+        raise UploadVerificationFailed("Uploaded source extension is unavailable.")
+    return f"originals/{session.job.media_id}/{attempt.id}/source{suffix}"
+
+
+def _verify_promoted_object(upload_object, destination, evidence):
+    if evidence.key != destination:
+        raise UploadVerificationFailed("Promoted S3 object key does not match.")
+    if evidence.size != upload_object.expected_size:
+        raise UploadVerificationFailed("Promoted S3 object size does not match.")
+    if evidence.content_type != upload_object.content_type:
+        raise UploadVerificationFailed("Promoted S3 object content type does not match.")
+    if not evidence.checksum_sha256:
+        raise UploadVerificationFailed("Promoted S3 object checksum is unavailable.")
+
+
+def _artifact_evidence(artifact):
+    return ObjectEvidence(
+        key=artifact.s3_key,
+        size=artifact.size_bytes,
+        content_type=artifact.content_type,
+        checksum_sha256=artifact.checksum,
+    )
+
+
+def _is_missing_object(error):
+    return str(error.response.get("Error", {}).get("Code", "")) in {
+        "404",
+        "NoSuchKey",
+        "NotFound",
+    }
+
+
+def promote_file_original(session_id, gateway):
+    should_copy = False
+    with transaction.atomic():
+        session = (
+            BrowserUploadSession.objects.select_for_update()
+            .select_related("job")
+            .get(pk=session_id)
+        )
+        upload_object = BrowserUploadObject.objects.select_for_update().get(session=session)
+        if upload_object.status != BrowserUploadObjectStatus.VERIFIED or not upload_object.checksum:
+            raise UploadVerificationFailed("Uploaded source must be verified before promotion.")
+        attempt, _ = MediaJobAttempt.objects.get_or_create(
+            job=session.job,
+            sequence=1,
+            defaults={"status": AttemptStatus.QUEUED},
+        )
+        destination = _promotion_destination(session, upload_object, attempt)
+        if upload_object.promoted_s3_key and upload_object.promoted_s3_key != destination:
+            raise UploadVerificationFailed("Promotion destination conflicts with existing intent.")
+        original_artifact, _ = AttemptArtifact.objects.get_or_create(
+            attempt=attempt,
+            s3_key=destination,
+            defaults={
+                "purpose": ArtifactPurpose.ORIGINAL,
+                "size_bytes": upload_object.expected_size,
+                "content_type": upload_object.content_type,
+                "checksum": upload_object.checksum,
+            },
+        )
+        AttemptArtifact.objects.get_or_create(
+            attempt=attempt,
+            s3_key=upload_object.s3_key,
+            defaults={
+                "purpose": ArtifactPurpose.UPLOAD_SOURCE,
+                "size_bytes": upload_object.expected_size,
+                "content_type": upload_object.content_type,
+                "checksum": upload_object.checksum,
+            },
+        )
+        if upload_object.promotion_status == PromotionStatus.VERIFIED:
+            return _artifact_evidence(original_artifact)
+        if upload_object.promotion_status in {PromotionStatus.PENDING, PromotionStatus.FAILED}:
+            should_copy = True
+        upload_object.promoted_s3_key = destination
+        upload_object.promotion_status = PromotionStatus.COPYING
+        upload_object.save(
+            update_fields=("promoted_s3_key", "promotion_status", "updated_at")
+        )
+
+    if should_copy:
+        gateway.copy_exact(upload_object.s3_key, destination)
+        evidence = gateway.head_exact(destination)
+    else:
+        try:
+            evidence = gateway.head_exact(destination)
+        except ClientError as error:
+            if not _is_missing_object(error):
+                raise
+            gateway.copy_exact(upload_object.s3_key, destination)
+            evidence = gateway.head_exact(destination)
+    try:
+        _verify_promoted_object(upload_object, destination, evidence)
+    except UploadVerificationFailed:
+        BrowserUploadObject.objects.filter(pk=upload_object.pk).update(
+            promotion_status=PromotionStatus.FAILED
+        )
+        raise
+
+    with transaction.atomic():
+        upload_object = BrowserUploadObject.objects.select_for_update().get(pk=upload_object.pk)
+        if upload_object.promoted_s3_key != destination:
+            raise UploadVerificationFailed("Promotion destination changed during verification.")
+        AttemptArtifact.objects.filter(
+            attempt=attempt,
+            s3_key=destination,
+        ).update(
+            size_bytes=evidence.size,
+            content_type=evidence.content_type,
+            checksum=evidence.checksum_sha256,
+            safe_error="",
+        )
+        upload_object.promotion_status = PromotionStatus.VERIFIED
+        upload_object.save(update_fields=("promotion_status", "updated_at"))
+    return evidence
+
+
 def _finalize_file_completion(session_id, upload_object_id, evidence):
     with transaction.atomic():
         session = BrowserUploadSession.objects.select_for_update().select_related("job").get(pk=session_id)
         upload_object = BrowserUploadObject.objects.select_for_update().get(pk=upload_object_id)
         if session.status == BrowserUploadStatus.COMPLETED:
             return _progress_snapshot(session)
-        upload_object.status = BrowserUploadObjectStatus.VERIFIED
-        upload_object.checksum = evidence.checksum_sha256
-        upload_object.save(update_fields=("status", "checksum", "updated_at"))
+        if upload_object.promotion_status != PromotionStatus.VERIFIED:
+            raise UploadVerificationFailed("Original promotion is not verified.")
         session.status = BrowserUploadStatus.COMPLETED
         session.confirmed_bytes = session.expected_total_size
         session.confirmed_file_count = 1
@@ -554,11 +698,7 @@ def _finalize_file_completion(session_id, upload_object_id, evidence):
                 "updated_at",
             )
         )
-        attempt, _ = MediaJobAttempt.objects.get_or_create(
-            job=session.job,
-            sequence=1,
-            defaults={"status": AttemptStatus.QUEUED},
-        )
+        attempt = MediaJobAttempt.objects.get(job=session.job, sequence=1)
         MediaJobCheckpoint.objects.update_or_create(
             attempt=attempt,
             name="source_verified",
@@ -566,6 +706,7 @@ def _finalize_file_completion(session_id, upload_object_id, evidence):
                 "status": CheckpointStatus.COMPLETED,
                 "evidence": {
                     "object_id": str(upload_object.id),
+                    "s3_key": evidence.key,
                     "size": evidence.size,
                     "content_type": evidence.content_type,
                     "checksum_sha256": evidence.checksum_sha256,
@@ -584,6 +725,7 @@ def complete_file_upload(
     idempotency_key,
     expected_revision,
     gateway,
+    promotion_storage,
 ):
     if not idempotency_key:
         raise InvalidUploadCommand("Completion idempotency key is required.")
@@ -599,9 +741,12 @@ def complete_file_upload(
     if session.status == BrowserUploadStatus.VERIFYING:
         if session.completion_idempotency_key != idempotency_key:
             raise UploadIdempotencyConflict("Upload verification belongs to another idempotency key.")
-        evidence = gateway.head_object(upload_object.s3_key)
-        _verify_completed_object(upload_object, evidence)
-        result = _finalize_file_completion(session_id, upload_object.id, evidence)
+        if upload_object.status != BrowserUploadObjectStatus.VERIFIED:
+            evidence = gateway.head_object(upload_object.s3_key)
+            _verify_completed_object(upload_object, evidence)
+            _record_completed_upload(session_id, upload_object.id, evidence)
+        promoted = promote_file_original(session_id, promotion_storage)
+        result = _finalize_file_completion(session_id, upload_object.id, promoted)
         release_upload_lease(session_id, owner_token)
         return result
     listed_parts = gateway.list_parts(upload_object.s3_key, upload_object.multipart_upload_id)
@@ -631,7 +776,9 @@ def complete_file_upload(
     )
     evidence = gateway.head_object(upload_object.s3_key)
     _verify_completed_object(upload_object, evidence)
-    result = _finalize_file_completion(session_id, upload_object.id, evidence)
+    _record_completed_upload(session_id, upload_object.id, evidence)
+    promoted = promote_file_original(session_id, promotion_storage)
+    result = _finalize_file_completion(session_id, upload_object.id, promoted)
     release_upload_lease(session_id, owner_token)
     return result
 

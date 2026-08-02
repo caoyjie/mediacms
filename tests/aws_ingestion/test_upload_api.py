@@ -7,7 +7,10 @@ from rest_framework.test import APIClient
 from files.models import BrowserUploadSession
 from files.services.s3_uploads import S3ObjectEvidence, S3Part
 from tests.aws_ingestion.test_hls_upload_sessions import CHECKSUM, HlsGateway, hls_entries
-from tests.aws_ingestion.test_upload_sessions import RecordingUploadGateway
+from tests.aws_ingestion.test_upload_sessions import (
+    RecordingPromotionStorage,
+    RecordingUploadGateway,
+)
 from users.models import SiteAdministrator, User
 
 
@@ -33,6 +36,11 @@ def ordinary_user(db):
 @pytest.fixture
 def gateway():
     return RecordingUploadGateway()
+
+
+@pytest.fixture
+def promotion_storage():
+    return RecordingPromotionStorage()
 
 
 def authenticated_client(user):
@@ -131,7 +139,7 @@ def test_detail_and_lease_actions_project_safe_progress(administrator, gateway):
 
 
 @pytest.mark.django_db
-def test_file_api_sign_reconcile_and_complete_flow(administrator, gateway):
+def test_file_api_sign_reconcile_and_complete_flow(administrator, gateway, promotion_storage):
     client = authenticated_client(administrator)
     checksum = "YWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWE="
     payload = {
@@ -149,7 +157,13 @@ def test_file_api_sign_reconcile_and_complete_flow(administrator, gateway):
     )
     gateway.head_evidence = S3ObjectEvidence(32_000_000, "video/mp4", '"final"', checksum)
 
-    with patch("files.views.aws_uploads._gateway", return_value=gateway):
+    with (
+        patch("files.views.aws_uploads._gateway", return_value=gateway),
+        patch(
+            "files.views.aws_uploads._processing_storage",
+            return_value=promotion_storage,
+        ),
+    ):
         created = client.post(
             "/api/v1/aws/uploads/",
             payload,
@@ -199,7 +213,11 @@ def test_file_api_sign_reconcile_and_complete_flow(administrator, gateway):
 
 
 @pytest.mark.django_db
-def test_stale_completion_revision_is_precondition_failed(administrator, gateway):
+def test_stale_completion_revision_is_precondition_failed(
+    administrator,
+    gateway,
+    promotion_storage,
+):
     client = authenticated_client(administrator)
     payload = {
         "source_kind": "file",
@@ -210,7 +228,13 @@ def test_stale_completion_revision_is_precondition_failed(administrator, gateway
         "content_type": "audio/mpeg",
         "fingerprint": "stale-fingerprint",
     }
-    with patch("files.views.aws_uploads._gateway", return_value=gateway):
+    with (
+        patch("files.views.aws_uploads._gateway", return_value=gateway),
+        patch(
+            "files.views.aws_uploads._processing_storage",
+            return_value=promotion_storage,
+        ),
+    ):
         created = client.post(
             "/api/v1/aws/uploads/",
             payload,
