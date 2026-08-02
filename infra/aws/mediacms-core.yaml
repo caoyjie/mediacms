@@ -439,6 +439,272 @@ Resources:
         - Key: Environment
           Value: !Ref Environment
 
+  VideoHlsJobTemplate:
+    Type: AWS::MediaConvert::JobTemplate
+    Properties:
+      AccelerationSettings:
+        Mode: DISABLED
+      Category: mediacms
+      Description: Fixed QVBR HLS ladder; the coordinator removes renditions above source resolution before CreateJob.
+      Name: !Sub '${ResourceNamePrefix}-video-hls-v1'
+      Priority: 0
+      SettingsJson: |
+        {
+          "Inputs": [
+            {
+              "AudioSelectors": {
+                "Default Audio": {"DefaultSelection": "DEFAULT"}
+              },
+              "VideoSelector": {"Rotate": "AUTO"}
+            }
+          ],
+          "OutputGroups": [
+            {
+              "Name": "Apple HLS",
+              "OutputGroupSettings": {
+                "Type": "HLS_GROUP_SETTINGS",
+                "HlsGroupSettings": {
+                  "MinSegmentLength": 0,
+                  "SegmentLength": 4
+                }
+              },
+              "Outputs": [
+                {
+                  "NameModifier": "_1080p",
+                  "ContainerSettings": {"Container": "M3U8", "M3u8Settings": {}},
+                  "VideoDescription": {
+                    "Width": 1920,
+                    "Height": 1080,
+                    "CodecSettings": {
+                      "Codec": "H_264",
+                      "H264Settings": {
+                        "FramerateControl": "INITIALIZE_FROM_SOURCE",
+                        "GopSize": 2.0,
+                        "GopSizeUnits": "SECONDS",
+                        "ParControl": "INITIALIZE_FROM_SOURCE",
+                        "QualityTuningLevel": "SINGLE_PASS_HQ",
+                        "RateControlMode": "QVBR",
+                        "MaxBitrate": 6000000,
+                        "QvbrSettings": {"QvbrQualityLevel": 8}
+                      }
+                    }
+                  },
+                  "AudioDescriptions": [
+                    {
+                      "AudioSourceName": "Default Audio",
+                      "CodecSettings": {
+                        "Codec": "AAC",
+                        "AacSettings": {
+                          "Bitrate": 128000,
+                          "CodingMode": "CODING_MODE_2_0",
+                          "CodecProfile": "LC",
+                          "SampleRate": 48000,
+                          "Specification": "MPEG4"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "NameModifier": "_720p",
+                  "ContainerSettings": {"Container": "M3U8", "M3u8Settings": {}},
+                  "VideoDescription": {
+                    "Width": 1280,
+                    "Height": 720,
+                    "CodecSettings": {
+                      "Codec": "H_264",
+                      "H264Settings": {
+                        "FramerateControl": "INITIALIZE_FROM_SOURCE",
+                        "GopSize": 2.0,
+                        "GopSizeUnits": "SECONDS",
+                        "ParControl": "INITIALIZE_FROM_SOURCE",
+                        "QualityTuningLevel": "SINGLE_PASS_HQ",
+                        "RateControlMode": "QVBR",
+                        "MaxBitrate": 4000000,
+                        "QvbrSettings": {"QvbrQualityLevel": 8}
+                      }
+                    }
+                  },
+                  "AudioDescriptions": [
+                    {
+                      "AudioSourceName": "Default Audio",
+                      "CodecSettings": {
+                        "Codec": "AAC",
+                        "AacSettings": {
+                          "Bitrate": 128000,
+                          "CodingMode": "CODING_MODE_2_0",
+                          "CodecProfile": "LC",
+                          "SampleRate": 48000,
+                          "Specification": "MPEG4"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "NameModifier": "_480p",
+                  "ContainerSettings": {"Container": "M3U8", "M3u8Settings": {}},
+                  "VideoDescription": {
+                    "Width": 854,
+                    "Height": 480,
+                    "CodecSettings": {
+                      "Codec": "H_264",
+                      "H264Settings": {
+                        "FramerateControl": "INITIALIZE_FROM_SOURCE",
+                        "GopSize": 2.0,
+                        "GopSizeUnits": "SECONDS",
+                        "ParControl": "INITIALIZE_FROM_SOURCE",
+                        "QualityTuningLevel": "SINGLE_PASS_HQ",
+                        "RateControlMode": "QVBR",
+                        "MaxBitrate": 1000000,
+                        "QvbrSettings": {"QvbrQualityLevel": 7}
+                      }
+                    }
+                  },
+                  "AudioDescriptions": [
+                    {
+                      "AudioSourceName": "Default Audio",
+                      "CodecSettings": {
+                        "Codec": "AAC",
+                        "AacSettings": {
+                          "Bitrate": 128000,
+                          "CodingMode": "CODING_MODE_2_0",
+                          "CodecProfile": "LC",
+                          "SampleRate": 48000,
+                          "Specification": "MPEG4"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "NameModifier": "_360p",
+                  "ContainerSettings": {"Container": "M3U8", "M3u8Settings": {}},
+                  "VideoDescription": {
+                    "Width": 640,
+                    "Height": 360,
+                    "CodecSettings": {
+                      "Codec": "H_264",
+                      "H264Settings": {
+                        "FramerateControl": "INITIALIZE_FROM_SOURCE",
+                        "GopSize": 2.0,
+                        "GopSizeUnits": "SECONDS",
+                        "ParControl": "INITIALIZE_FROM_SOURCE",
+                        "QualityTuningLevel": "SINGLE_PASS_HQ",
+                        "RateControlMode": "QVBR",
+                        "MaxBitrate": 700000,
+                        "QvbrSettings": {"QvbrQualityLevel": 7}
+                      }
+                    }
+                  },
+                  "AudioDescriptions": [
+                    {
+                      "AudioSourceName": "Default Audio",
+                      "CodecSettings": {
+                        "Codec": "AAC",
+                        "AacSettings": {
+                          "Bitrate": 128000,
+                          "CodingMode": "CODING_MODE_2_0",
+                          "CodecProfile": "LC",
+                          "SampleRate": 48000,
+                          "Specification": "MPEG4"
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "Name": "First valid video frame",
+              "OutputGroupSettings": {
+                "Type": "FILE_GROUP_SETTINGS",
+                "FileGroupSettings": {}
+              },
+              "Outputs": [
+                {
+                  "NameModifier": "_poster",
+                  "ContainerSettings": {"Container": "RAW"},
+                  "VideoDescription": {
+                    "Width": 1280,
+                    "Height": 720,
+                    "CodecSettings": {
+                      "Codec": "FRAME_CAPTURE",
+                      "FrameCaptureSettings": {
+                        "FramerateNumerator": 1,
+                        "FramerateDenominator": 1,
+                        "MaxCaptures": 1,
+                        "Quality": 80
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      StatusUpdateInterval: SECONDS_10
+      Tags:
+        Project: mediacms
+        Environment: !Ref Environment
+
+  AudioHlsJobTemplate:
+    Type: AWS::MediaConvert::JobTemplate
+    Properties:
+      AccelerationSettings:
+        Mode: DISABLED
+      Category: mediacms
+      Description: Audio-only Apple HLS template.
+      Name: !Sub '${ResourceNamePrefix}-audio-hls-v1'
+      Priority: 0
+      SettingsJson: |
+        {
+          "Inputs": [
+            {
+              "AudioSelectors": {
+                "Default Audio": {"DefaultSelection": "DEFAULT"}
+              }
+            }
+          ],
+          "OutputGroups": [
+            {
+              "Name": "Apple HLS Audio",
+              "OutputGroupSettings": {
+                "Type": "HLS_GROUP_SETTINGS",
+                "HlsGroupSettings": {
+                  "MinSegmentLength": 0,
+                  "SegmentLength": 4
+                }
+              },
+              "Outputs": [
+                {
+                  "NameModifier": "_audio",
+                  "ContainerSettings": {"Container": "M3U8", "M3u8Settings": {}},
+                  "AudioDescriptions": [
+                    {
+                      "AudioSourceName": "Default Audio",
+                      "CodecSettings": {
+                        "Codec": "AAC",
+                        "AacSettings": {
+                          "Bitrate": 128000,
+                          "CodingMode": "CODING_MODE_2_0",
+                          "CodecProfile": "LC",
+                          "SampleRate": 48000,
+                          "Specification": "MPEG4"
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      StatusUpdateInterval: SECONDS_10
+      Tags:
+        Project: mediacms
+        Environment: !Ref Environment
+
 Outputs:
   MediaBucketName:
     Value: !Ref MediaBucket
@@ -447,9 +713,9 @@ Outputs:
   MediaConvertServiceRoleArn:
     Value: !GetAtt MediaConvertServiceRole.Arn
   VideoHlsJobTemplateName:
-    Value: pending
+    Value: !Ref VideoHlsJobTemplate
   AudioHlsJobTemplateName:
-    Value: pending
+    Value: !Ref AudioHlsJobTemplate
   MediaDistributionId:
     Value: !Ref MediaDistribution
   MediaDistributionDomainName:
