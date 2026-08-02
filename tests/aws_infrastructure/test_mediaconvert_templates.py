@@ -38,7 +38,7 @@ def video_outputs(settings):
     ]
 
 
-def test_job_templates_are_versioned_environment_scoped_and_report_progress():
+def test_job_templates_are_versioned_environment_scoped_and_api_polled():
     video = resource("VideoHlsJobTemplate")
     audio = resource("AudioHlsJobTemplate")
     assert video["Type"] == audio["Type"] == "AWS::MediaConvert::JobTemplate"
@@ -50,8 +50,8 @@ def test_job_templates_are_versioned_environment_scoped_and_report_progress():
     }
     assert "Status" not in video["Properties"]
     assert "Status" not in audio["Properties"]
-    assert video["Properties"]["StatusUpdateInterval"] == "SECONDS_10"
-    assert audio["Properties"]["StatusUpdateInterval"] == "SECONDS_10"
+    assert "StatusUpdateInterval" not in video["Properties"]
+    assert "StatusUpdateInterval" not in audio["Properties"]
     assert video["Properties"]["AccelerationSettings"]["Mode"] == "DISABLED"
     assert audio["Properties"]["AccelerationSettings"]["Mode"] == "DISABLED"
 

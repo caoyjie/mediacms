@@ -362,7 +362,7 @@ Expected: FAIL because the Job Template resources are absent.
 
 - [ ] **Step 3: Implement both Job Templates**
 
-Use `AWS::MediaConvert::JobTemplate` with `!Sub '${ResourceNamePrefix}-video-hls-v1'` and `!Sub '${ResourceNamePrefix}-audio-hls-v1'`, `StatusUpdateInterval=SECONDS_10`, standard tags and JSON settings. `AWS::MediaConvert::JobTemplate` has no `Status` CloudFormation property. The video template contains one Apple HLS output group with four H.264/AAC variants plus a frame-capture file output group. Frame capture is supplementary, never the only output. The audio template contains one Apple HLS AAC output and no fake video.
+Use `AWS::MediaConvert::JobTemplate` with `!Sub '${ResourceNamePrefix}-video-hls-v1'` and `!Sub '${ResourceNamePrefix}-audio-hls-v1'`, standard tags and JSON settings. `AWS::MediaConvert::JobTemplate` has no `Status` CloudFormation property. Omit `StatusUpdateInterval` because the API-only reconciler does not consume EventBridge status updates. The video template contains one Apple HLS output group with four H.264/AAC variants plus a frame-capture file output group. Frame capture is supplementary, never the only output. The audio template contains one Apple HLS AAC output and no fake video.
 
 The static template contains all four video renditions. Document in the resource description that the processing coordinator must remove renditions above probed source resolution before `CreateJob`; the template itself cannot make that per-input decision.
 

@@ -631,7 +631,6 @@ Resources:
             }
           ]
         }
-      StatusUpdateInterval: SECONDS_10
       Tags:
         Project: mediacms
         Environment: !Ref Environment
@@ -688,7 +687,6 @@ Resources:
             }
           ]
         }
-      StatusUpdateInterval: SECONDS_10
       Tags:
         Project: mediacms
         Environment: !Ref Environment
