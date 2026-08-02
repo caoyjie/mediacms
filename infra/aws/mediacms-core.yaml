@@ -4,7 +4,9 @@ Description: MediaCMS private AWS media infrastructure
 Metadata:
   cfn-lint:
     config:
-      ignore_checks: [W2001, W8001]
+      # W1030 cannot infer that the empty ACM ARN is used only in the
+      # CloudFront default-certificate branch.
+      ignore_checks: [W1030, W2001, W8001]
 
 Parameters:
   Environment:
@@ -49,6 +51,7 @@ Parameters:
   AcmCertificateArn:
     Type: String
     Default: ''
+    AllowedPattern: '^$|^arn:aws[a-zA-Z-]*:acm:us-east-1:[0-9]{12}:certificate/[0-9a-f-]+$'
   AlarmNotificationEmail:
     Type: String
     Default: ''
@@ -92,19 +95,191 @@ Rules:
         AssertDescription: Automated ABR is disabled for the MVP.
       - Assert: !Equals [!Ref AccelerationMode, DISABLED]
         AssertDescription: Accelerated transcoding is disabled for the MVP.
+  CustomDomainConfigurationIsComplete:
+    Assertions:
+      - Assert: !Or
+          - !Equals [!Ref EnableCustomDomain, 'false']
+          - !And
+            - !Not [!Equals [!Ref MediaDomainName, '']]
+            - !Not [!Equals [!Ref AcmCertificateArn, '']]
+        AssertDescription: Custom domains require both a media domain and ACM certificate ARN.
 
 Conditions:
   UseDefaultMediaBucketName: !Equals [!Ref MediaBucketName, '']
+  UseCustomDomain: !Equals [!Ref EnableCustomDomain, 'true']
 
 Resources:
-  CoreTemplateMarker:
-    Type: AWS::CloudFormation::WaitConditionHandle
+  MediaBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !If
+        - UseDefaultMediaBucketName
+        - !Sub 'mediacms-${AWS::AccountId}-us-east-1'
+        - !Ref MediaBucketName
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders: ['*']
+            AllowedMethods: [PUT, HEAD]
+            AllowedOrigins: [!Ref ApplicationOrigin]
+            ExposedHeaders:
+              - ETag
+              - x-amz-checksum-crc32
+              - x-amz-checksum-crc32c
+              - x-amz-checksum-sha1
+              - x-amz-checksum-sha256
+            MaxAge: 3600
+      LifecycleConfiguration:
+        Rules:
+          - Id: AbortStaleMultipartUploads
+            Status: Enabled
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 1
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      Tags:
+        - Key: Project
+          Value: mediacms
+        - Key: Environment
+          Value: !Ref Environment
+
+  MediaOAC:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Description: !Sub '${ResourceNamePrefix} private S3 media origin'
+        Name: !Sub '${ResourceNamePrefix}-media-oac'
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  CloudFrontPublicKeyCurrentResource:
+    Type: AWS::CloudFront::PublicKey
+    Properties:
+      PublicKeyConfig:
+        CallerReference: !Sub '${AWS::StackName}-current'
+        Comment: !Sub '${ResourceNamePrefix} current playback signing key'
+        EncodedKey: !Ref CloudFrontPublicKeyCurrent
+        Name: !Sub '${ResourceNamePrefix}-playback-current'
+
+  CloudFrontPublicKeyNextResource:
+    Type: AWS::CloudFront::PublicKey
+    Properties:
+      PublicKeyConfig:
+        CallerReference: !Sub '${AWS::StackName}-next'
+        Comment: !Sub '${ResourceNamePrefix} next playback signing key'
+        EncodedKey: !Ref CloudFrontPublicKeyNext
+        Name: !Sub '${ResourceNamePrefix}-playback-next'
+
+  MediaKeyGroup:
+    Type: AWS::CloudFront::KeyGroup
+    Properties:
+      KeyGroupConfig:
+        Comment: !Sub '${ResourceNamePrefix} playback signing keys'
+        Items:
+          - !Ref CloudFrontPublicKeyCurrentResource
+          - !Ref CloudFrontPublicKeyNextResource
+        Name: !Sub '${ResourceNamePrefix}-playback'
+
+  MediaCorsResponseHeadersPolicy:
+    Type: AWS::CloudFront::ResponseHeadersPolicy
+    Properties:
+      ResponseHeadersPolicyConfig:
+        Comment: !Sub '${ResourceNamePrefix} credentialed media CORS'
+        CorsConfig:
+          AccessControlAllowCredentials: true
+          AccessControlAllowHeaders:
+            Items: ['*']
+          AccessControlAllowMethods:
+            Items: [GET, HEAD, OPTIONS]
+          AccessControlAllowOrigins:
+            Items: [!Ref ApplicationOrigin]
+          AccessControlExposeHeaders:
+            Items:
+              - ETag
+              - x-amz-checksum-crc32
+              - x-amz-checksum-crc32c
+              - x-amz-checksum-sha1
+              - x-amz-checksum-sha256
+          AccessControlMaxAgeSec: 3600
+          OriginOverride: true
+        Name: !Sub '${ResourceNamePrefix}-media-cors'
+
+  MediaDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Aliases: !If
+          - UseCustomDomain
+          - [!Ref MediaDomainName]
+          - !Ref AWS::NoValue
+        Comment: !Sub '${ResourceNamePrefix} private media delivery'
+        DefaultCacheBehavior:
+          AllowedMethods: [GET, HEAD, OPTIONS]
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6
+          CachedMethods: [GET, HEAD, OPTIONS]
+          Compress: true
+          ResponseHeadersPolicyId: !Ref MediaCorsResponseHeadersPolicy
+          TargetOriginId: MediaS3Origin
+          TrustedKeyGroups: [!Ref MediaKeyGroup]
+          ViewerProtocolPolicy: redirect-to-https
+        Enabled: true
+        HttpVersion: http2and3
+        IPV6Enabled: true
+        Origins:
+          - DomainName: !GetAtt MediaBucket.RegionalDomainName
+            Id: MediaS3Origin
+            OriginAccessControlId: !Ref MediaOAC
+            S3OriginConfig:
+              OriginAccessIdentity: ''
+        PriceClass: PriceClass_100
+        ViewerCertificate: !If
+          - UseCustomDomain
+          - AcmCertificateArn: !Ref AcmCertificateArn
+            MinimumProtocolVersion: TLSv1.2_2021
+            SslSupportMethod: sni-only
+          - CloudFrontDefaultCertificate: true
+      Tags:
+        - Key: Project
+          Value: mediacms
+        - Key: Environment
+          Value: !Ref Environment
+
+  MediaBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref MediaBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowCloudFrontReadOnly
+            Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Action: s3:GetObject
+            Resource: !Sub '${MediaBucket.Arn}/*'
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub 'arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${MediaDistribution}'
 
 Outputs:
   MediaBucketName:
-    Value: pending
+    Value: !Ref MediaBucket
   MediaBucketArn:
-    Value: pending
+    Value: !GetAtt MediaBucket.Arn
   MediaConvertServiceRoleArn:
     Value: pending
   VideoHlsJobTemplateName:
@@ -112,15 +287,15 @@ Outputs:
   AudioHlsJobTemplateName:
     Value: pending
   MediaDistributionId:
-    Value: pending
+    Value: !Ref MediaDistribution
   MediaDistributionDomainName:
-    Value: pending
+    Value: !GetAtt MediaDistribution.DomainName
   MediaKeyGroupId:
-    Value: pending
+    Value: !Ref MediaKeyGroup
   CloudFrontPublicKeyCurrentId:
-    Value: pending
+    Value: !Ref CloudFrontPublicKeyCurrentResource
   CloudFrontPublicKeyNextId:
-    Value: pending
+    Value: !Ref CloudFrontPublicKeyNextResource
   RuntimeUserName:
     Value: pending
   RuntimeCredentialsSecretArn:
