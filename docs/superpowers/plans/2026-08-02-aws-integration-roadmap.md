@@ -48,4 +48,4 @@
 
 ## 当前执行入口
 
-Domain foundation、AWS infrastructure、Browser ingestion 和 Processing orchestration 已完成本地/集成验证。`mediacms-dev` Stack 已部署，浏览器直传文件与本地解包 HLS 的管理员 API 已通过 PostgreSQL 17 测试和真实私有 S3 SigV4 Multipart 冒烟验证；验证对象与 Multipart 均已精确清理。下一步执行 Task 13 的真实短视频/音频串行验收，ACM 自定义域名继续等待 Cloudflare 外部门禁且不阻塞开发。
+Domain foundation、AWS infrastructure、Browser ingestion、Processing orchestration 和 Task 13 视频/音频验收已完成本地/集成验证。`mediacms-dev` Stack 已部署，真实 MediaConvert 视频/音频任务已串行通过并精确清理。下一步是 Task 5 YouTube/字幕后端；CloudFront 播放授权、任务中心 API、播放进度 API 和生产交付仍未完成，ACM 自定义域名继续等待 Cloudflare 外部门禁且不阻塞这些开发。
