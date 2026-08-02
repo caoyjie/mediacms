@@ -27,7 +27,7 @@ flowchart LR
 组件职责：
 
 - `processing_runner.py`：读取 Attempt/检查点并选择下一动作，不包含 AWS SDK 细节。
-- `mediaconvert.py`：创建、列举对账、查询和取消 Job；强制模板、标签、`userMetadata` 和幂等 Token。
+- `mediaconvert.py`：Probe已验证的私有S3原件，并创建、列举对账、查询和取消Job；强制输入范围、模板、标签、`userMetadata`和幂等Token。
 - `output_verification.py`：验证 AWS 输出路径、HLS manifest 闭包与 S3 对象证据。
 - `asset_publishing.py`：建立 candidate 版本、登记精确 Asset并调用原子激活。
 - `processing_cleanup.py`：清理数据库登记的精确临时 Key/本地路径。
@@ -71,6 +71,8 @@ Attempt持久化 `template_name`、`template_version`、`client_request_token`�
 ```text
 sha256(attempt_id + template_version + input_checksum)
 ```
+
+提交意图前调用MediaConvert `Probe`读取已验证的`originals/` S3 URI，规范化保存时长、视频宽高、codec和音轨证据；Probe不得接受HTTP URL、`uploads/`、`candidates/`或其他Bucket。视频梯度只保留不高于规范化源高度的360p/480p/720p/1080p输出，尺寸保持偶数；音频不产生视频梯度。后端不为生产探测启动FFprobe或下载原件。
 
 提交顺序固定为：
 
