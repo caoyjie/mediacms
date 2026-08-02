@@ -76,6 +76,12 @@ The `mediacms-dev` Stack reached `CREATE_COMPLETE` on 2026-08-02 after the exact
 - The runtime identity can use only the approved media prefixes, read both MediaConvert Job Templates and discover the MediaConvert endpoint. The exact verification object was deleted and no verification object remains.
 - Runtime requests for an unauthorized key, unrelated Bucket, IAM management, CloudFormation listing, Secrets Manager retrieval and CloudWatch metric writes were denied.
 - IAM policy simulation allows `iam:PassRole` only for the Stack's exact MediaConvert service Role; a different Role is implicitly denied.
+- The reviewed Change Set `mediacms-dev-mediaconvert-reconcile-20260802T055022Z`
+  updated only `MediaCMSRuntimePolicy` without replacement. The restricted Runtime
+  identity successfully called `ListJobs` and probed a disposable project
+  `originals/` video, while CloudFormation access and a foreign S3 Probe input
+  remained denied. The verification object and isolated prefix were empty after
+  cleanup.
 - The Stack contains no SNS, CloudWatch alarm/dashboard, custom metric, EventBridge, SQS or monitoring Lambda resource.
 - The protected dev runtime env is installed outside the repository with owner `root`, group `caoyujie` and mode `0640`; its values were not printed or committed.
 
