@@ -255,6 +255,45 @@ class User(AbstractUser):
         return True
 
 
+class SiteAdministrator(models.Model):
+    singleton_key = models.CharField(
+        primary_key=True,
+        max_length=32,
+        default="default",
+        editable=False,
+    )
+    user = models.OneToOneField(
+        User,
+        on_delete=models.PROTECT,
+        related_name="site_administrator_binding",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(singleton_key="default"),
+                name="users_site_admin_default_key",
+            )
+        ]
+
+    @classmethod
+    def get_solo(cls):
+        return cls.objects.select_related("user").filter(singleton_key="default").first()
+
+    @classmethod
+    def is_site_administrator(cls, user):
+        if not getattr(user, "is_authenticated", False):
+            return False
+        if not user.is_active or user.is_approved is not True:
+            return False
+        return cls.objects.filter(singleton_key="default", user_id=user.pk).exists()
+
+    def __str__(self):
+        return self.user.username
+
+
 class Channel(models.Model):
     title = models.CharField(max_length=90, db_index=True)
     description = models.TextField(blank=True, help_text="description")

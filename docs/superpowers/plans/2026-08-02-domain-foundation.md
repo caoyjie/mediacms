@@ -433,7 +433,7 @@ git commit -m "feat: add postgres fifo processing lease"
 - Produces: `SiteAdministrator.get_solo()`, `SiteAdministrator.is_site_administrator(user) -> bool`.
 - Produces command: `python manage.py init_site_administrator --username NAME --email ADDRESS`, with password accepted only through `MEDIACMS_ADMIN_PASSWORD` or interactive hidden prompt; non-interactive mode is `--no-input`.
 
-- [ ] **Step 1: Write failing singleton and idempotency tests**
+- [x] **Step 1: Write failing singleton and idempotency tests**
 
 ```python
 import pytest
@@ -460,25 +460,25 @@ def test_init_command_is_idempotent(monkeypatch):
     assert SiteAdministrator.objects.count() == 1
 ```
 
-- [ ] **Step 2: Run tests and verify the model/command are missing**
+- [x] **Step 2: Run tests and verify the model/command are missing**
 
 Run: `pytest tests/users/test_site_administrator.py -q`
 
 Expected: FAIL importing `SiteAdministrator`.
 
-- [ ] **Step 3: Implement singleton schema and manager methods**
+- [x] **Step 3: Implement singleton schema and manager methods**
 
 Use `singleton_key=CharField(primary_key=True, default="default", editable=False)`, `user=OneToOneField(User, PROTECT, related_name="site_administrator_binding")`, timestamps, and `CheckConstraint(condition=Q(singleton_key="default"), name="users_site_admin_default_key")`. `is_site_administrator` must require authenticated, active, approved-compatible user identity and the exact singleton binding.
 
-- [ ] **Step 4: Implement safe idempotent initialization**
+- [x] **Step 4: Implement safe idempotent initialization**
 
 The command runs in `transaction.atomic()`, locks the singleton lookup, creates or updates the named user as active/staff/superuser/approved, binds it, and deactivates every other user. It never prints the password and rejects non-interactive execution without `MEDIACMS_ADMIN_PASSWORD`. Re-running with the same username does not create rows; binding a different username requires explicit `--rebind`.
 
-- [ ] **Step 5: Remove User add/delete capabilities from Django Admin**
+- [x] **Step 5: Remove User add/delete capabilities from Django Admin**
 
 Keep the User model registered for dependency visibility but make `UserAdmin.has_add_permission()` and `has_delete_permission()` return `False`; restrict queryset/change permission to the bound administrator. Register `SiteAdministrator` read-only with add/delete disabled.
 
-- [ ] **Step 6: Generate migration and run tests**
+- [x] **Step 6: Generate migration and run tests**
 
 Run: `python manage.py makemigrations users --name siteadministrator`
 
@@ -488,7 +488,7 @@ Run: `pytest tests/users/test_site_administrator.py -q`
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add users/models.py users/admin.py users/management users/migrations/0004_siteadministrator.py tests/users/test_site_administrator.py
