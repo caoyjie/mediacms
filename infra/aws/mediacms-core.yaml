@@ -107,6 +107,9 @@ Rules:
 Conditions:
   UseDefaultMediaBucketName: !Equals [!Ref MediaBucketName, '']
   UseCustomDomain: !Equals [!Ref EnableCustomDomain, 'true']
+  CreateRuntimeAccessKeyA: !Equals [!Ref RuntimeAccessKeyAEnabled, 'true']
+  CreateRuntimeAccessKeyB: !Equals [!Ref RuntimeAccessKeyBEnabled, 'true']
+  UseRuntimeAccessKeyA: !Equals [!Ref RuntimeActiveAccessKeySlot, A]
 
 Resources:
   MediaBucket:
@@ -275,13 +278,174 @@ Resources:
               StringEquals:
                 AWS:SourceArn: !Sub 'arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${MediaDistribution}'
 
+  MediaCMSRuntimeUser:
+    Type: AWS::IAM::User
+    Properties:
+      UserName: !Sub 'mediacms-${Environment}-runtime'
+      Tags:
+        - Key: Project
+          Value: mediacms
+        - Key: Environment
+          Value: !Ref Environment
+
+  MediaConvertServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ResourceNamePrefix}-mediaconvert'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: mediaconvert.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: MediaBucketTranscoding
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: ListTranscodingPrefixes
+                Effect: Allow
+                Action: s3:ListBucket
+                Resource: !GetAtt MediaBucket.Arn
+                Condition:
+                  StringLike:
+                    s3:prefix:
+                      - originals/*
+                      - candidates/*
+              - Sid: ReadOriginals
+                Effect: Allow
+                Action: s3:GetObject
+                Resource: !Sub '${MediaBucket.Arn}/originals/*'
+              - Sid: WriteCandidates
+                Effect: Allow
+                Action: s3:PutObject
+                Resource: !Sub '${MediaBucket.Arn}/candidates/*'
+      Tags:
+        - Key: Project
+          Value: mediacms
+        - Key: Environment
+          Value: !Ref Environment
+
+  MediaCMSRuntimePolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: !Sub '${ResourceNamePrefix}-runtime'
+      Users: [!Ref MediaCMSRuntimeUser]
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: InspectMediaBucket
+            Effect: Allow
+            Action:
+              - s3:GetBucketLocation
+              - s3:ListBucketMultipartUploads
+            Resource: !GetAtt MediaBucket.Arn
+          - Sid: ListMediaPrefixes
+            Effect: Allow
+            Action: s3:ListBucket
+            Resource: !GetAtt MediaBucket.Arn
+            Condition:
+              StringLike:
+                s3:prefix:
+                  - uploads/*
+                  - originals/*
+                  - candidates/*
+                  - system/defaults/*
+          - Sid: ManageMediaObjects
+            Effect: Allow
+            Action:
+              - s3:GetObject
+              - s3:PutObject
+              - s3:DeleteObject
+              - s3:AbortMultipartUpload
+              - s3:ListMultipartUploadParts
+            Resource:
+              - !Sub '${MediaBucket.Arn}/uploads/*'
+              - !Sub '${MediaBucket.Arn}/originals/*'
+              - !Sub '${MediaBucket.Arn}/candidates/*'
+              - !Sub '${MediaBucket.Arn}/system/defaults/*'
+          - Sid: CreateTaggedMediaConvertJobs
+            Effect: Allow
+            Action: mediaconvert:CreateJob
+            Resource: '*'
+            Condition:
+              StringEquals:
+                aws:RequestTag/Project: mediacms
+                aws:RequestTag/Environment: !Ref Environment
+          - Sid: ManageMediaConvertJobs
+            Effect: Allow
+            Action:
+              - mediaconvert:GetJob
+              - mediaconvert:CancelJob
+            Resource: !Sub 'arn:${AWS::Partition}:mediaconvert:${AWS::Region}:${AWS::AccountId}:jobs/*'
+          - Sid: ReadMediaConvertTemplates
+            Effect: Allow
+            Action: mediaconvert:GetJobTemplate
+            Resource: !Sub 'arn:${AWS::Partition}:mediaconvert:${AWS::Region}:${AWS::AccountId}:jobTemplates/${ResourceNamePrefix}-*'
+          - Sid: DiscoverMediaConvertEndpoint
+            Effect: Allow
+            Action: mediaconvert:DescribeEndpoints
+            Resource: '*'
+          - Sid: PublishProcessingMetrics
+            Effect: Allow
+            Action: cloudwatch:PutMetricData
+            Resource: '*'
+            Condition:
+              StringEquals:
+                cloudwatch:namespace: MediaCMS/Processing
+          - Sid: PassMediaConvertRole
+            Effect: Allow
+            Action: iam:PassRole
+            Resource: !GetAtt MediaConvertServiceRole.Arn
+            Condition:
+              StringEquals:
+                iam:PassedToService: mediaconvert.amazonaws.com
+
+  RuntimeAccessKeyA:
+    Type: AWS::IAM::AccessKey
+    Condition: CreateRuntimeAccessKeyA
+    Properties:
+      Status: Active
+      UserName: !Ref MediaCMSRuntimeUser
+
+  RuntimeAccessKeyB:
+    Type: AWS::IAM::AccessKey
+    Condition: CreateRuntimeAccessKeyB
+    Properties:
+      Status: Active
+      UserName: !Ref MediaCMSRuntimeUser
+
+  RuntimeCredentialsSecret:
+    Type: AWS::SecretsManager::Secret
+    DeletionPolicy: RetainExceptOnCreate
+    UpdateReplacePolicy: Retain
+    Properties:
+      Description: !Sub '${ResourceNamePrefix} runtime AWS credentials'
+      Name: !Sub '${ResourceNamePrefix}/runtime/aws-credentials'
+      SecretString: !Sub
+        - '{"AWS_ACCESS_KEY_ID":"${AccessKeyId}","AWS_SECRET_ACCESS_KEY":"${SecretAccessKey}","AWS_REGION":"us-east-1","AWS_DEFAULT_REGION":"us-east-1"}'
+        - AccessKeyId: !If
+            - UseRuntimeAccessKeyA
+            - !Ref RuntimeAccessKeyA
+            - !Ref RuntimeAccessKeyB
+          SecretAccessKey: !If
+            - UseRuntimeAccessKeyA
+            - !GetAtt RuntimeAccessKeyA.SecretAccessKey
+            - !GetAtt RuntimeAccessKeyB.SecretAccessKey
+      Tags:
+        - Key: Project
+          Value: mediacms
+        - Key: Environment
+          Value: !Ref Environment
+
 Outputs:
   MediaBucketName:
     Value: !Ref MediaBucket
   MediaBucketArn:
     Value: !GetAtt MediaBucket.Arn
   MediaConvertServiceRoleArn:
-    Value: pending
+    Value: !GetAtt MediaConvertServiceRole.Arn
   VideoHlsJobTemplateName:
     Value: pending
   AudioHlsJobTemplateName:
@@ -297,6 +461,6 @@ Outputs:
   CloudFrontPublicKeyNextId:
     Value: !Ref CloudFrontPublicKeyNextResource
   RuntimeUserName:
-    Value: pending
+    Value: !Ref MediaCMSRuntimeUser
   RuntimeCredentialsSecretArn:
-    Value: pending
+    Value: !Ref RuntimeCredentialsSecret
