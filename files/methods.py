@@ -581,6 +581,11 @@ def create_video_trim_request(media, data):
         VideoTrimRequest object
     """
 
+    from .services.storage_backend import LegacyProcessingNotAllowed, legacy_processing_allowed
+
+    if not legacy_processing_allowed(media):
+        raise LegacyProcessingNotAllowed("AWS media cannot use legacy video trimming")
+
     video_action = "replace"
     if data.get('saveIndividualSegments'):
         video_action = "create_segments"

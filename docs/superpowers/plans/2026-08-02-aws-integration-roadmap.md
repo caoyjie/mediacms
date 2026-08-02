@@ -12,7 +12,7 @@
 
 | 顺序 | 计划 | 独立交付物 | 外部阻塞 |
 | ---: | --- | --- | --- |
-| 1 | Domain foundation | Media兼容字段、Job/Attempt/Checkpoint、AssetVersion、FIFO Lease、唯一管理员 | 无 |
+| 1 | ✅ Domain foundation（完成） | Media兼容字段、Job/Attempt/Checkpoint、AssetVersion、FIFO Lease、唯一管理员 | 无 |
 | 2 | AWS infrastructure | 独立S3/IAM/CloudFront/MediaConvert模板、CloudWatch、dev Stack | ACM自定义域名部分等待实际域名 |
 | 3 | Browser ingestion | Multipart API、恢复对账、HLS ZIP对象清单和上传租约 | 无 |
 | 4 | Processing orchestration | 来源检查点执行器、MediaConvert协调、原子激活、取消和cleanup | 依赖AWS dev Stack |
@@ -48,4 +48,4 @@
 
 ## 当前执行入口
 
-从 [`2026-08-02-domain-foundation.md`](2026-08-02-domain-foundation.md) 开始。该计划完成并通过空库迁移、模型约束和故障恢复测试后，才编写并执行 AWS infrastructure 计划。
+Domain foundation 已通过空库迁移、模型约束、故障恢复和 legacy pipeline guard 验证。下一步编写并执行 AWS infrastructure 计划。

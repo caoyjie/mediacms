@@ -569,7 +569,7 @@ git commit -m "feat: enforce single administrator access"
 - Create: `files/services/storage_backend.py`
 - Modify: `files/models/media.py`
 - Modify: `files/models/media.py` scheduling sites in `save()`, `media_init()`, `set_encoding_status()` and `media_post_save()`
-- Modify: `files/tasks.py` entry points `encode_media`, `create_hls`, `media_init`, `post_trim_action`, and `video_trim_task`
+- Modify: `files/tasks.py` entry points `encode_media`, `chunkize_media`, `produce_sprite_from_video`, `create_hls`, `media_init`, `post_trim_action`, and `video_trim_task`
 - Modify: `files/methods.py` entry point `create_video_trim_request`
 - Modify: `files/views/pages.py` endpoint `trim_video`
 - Create: `tests/aws_domain/test_legacy_pipeline_guard.py`
@@ -580,13 +580,13 @@ git commit -m "feat: enforce single administrator access"
 - Produces: `uses_aws_pipeline(media: Media) -> bool` and `legacy_processing_allowed(media: Media) -> bool`.
 - Guarantees: saving AWS Media cannot enqueue local encoding, HLS, sprite, trim or local playback fallback tasks.
 
-- [ ] **Step 1: Confirm the approved legacy entry-point inventory has not drifted**
+- [x] **Step 1: Confirm the approved legacy entry-point inventory has not drifted**
 
 Run: `rg -n "post_save|media_init|create_hls|encode_media|sprites|trim" files uploader`
 
 Expected: the command still identifies the explicit scheduling and execution boundaries listed in this task's Files section. If it finds a new executable boundary, add its exact function and file to this plan before implementation; migrations, field declarations and URL strings are not executable boundaries.
 
-- [ ] **Step 2: Write a failing spy-based regression test**
+- [x] **Step 2: Write a failing spy-based regression test**
 
 Create an AWS Media with `storage_backend="aws"`; patch `files.models.media.tasks.media_init.apply_async`, `files.models.media.tasks.encode_media.apply_async`, `files.models.media.tasks.create_hls.delay`, `files.models.media.tasks.post_trim_action.delay`, and `files.views.pages.video_trim_task.delay`; save and initialize the media, then assert every spy has zero calls. Directly call each guarded task with an AWS media identifier and assert it exits before accessing a local path. Add a legacy-local control test proving the guard does not silently delete existing behavior outside AWS mode.
 
@@ -594,17 +594,17 @@ Run: `pytest tests/aws_domain/test_legacy_pipeline_guard.py -q`
 
 Expected: FAIL by observing at least one current local processing entry point.
 
-- [ ] **Step 3: Add one central backend predicate and guard every discovered entry point**
+- [x] **Step 3: Add one central backend predicate and guard every discovered entry point**
 
 Use `legacy_processing_allowed(media)` at signal and direct task scheduling boundaries. Do not rely on `DO_NOT_TRANSCODE_VIDEO` alone. AWS mode rejects a legacy-local import request at its service/API boundary but does not remove legacy models, migrations, tables or ContentTypes.
 
-- [ ] **Step 4: Verify the guard and preserved app graph**
+- [x] **Step 4: Verify the guard and preserved app graph**
 
 Run: `pytest tests/aws_domain/test_legacy_pipeline_guard.py tests/test_imports.py tests/settings/test_portal_workflow.py -q`
 
 Expected: PASS; installed migration-dependent apps remain importable.
 
-- [ ] **Step 5: Verify migrations from an empty PostgreSQL database**
+- [x] **Step 5: Verify migrations from an empty PostgreSQL database**
 
 Run inside the development Compose PostgreSQL environment with a newly named empty test database:
 
@@ -617,7 +617,7 @@ python manage.py check --deploy
 
 Expected: all migrations apply once, the initialization command creates exactly one active user/binding, the second command run is idempotent, migration plan is empty, and deploy check has no new AWS-domain errors. Supply `MEDIACMS_ADMIN_PASSWORD` through the process environment without printing it.
 
-- [ ] **Step 6: Run the complete Phase 1 verification suite**
+- [x] **Step 6: Run the complete Phase 1 verification suite**
 
 Run:
 
@@ -630,7 +630,7 @@ git diff --check
 
 Expected: zero test failures, no missing migrations, no Django check errors, and no whitespace errors.
 
-- [ ] **Step 7: Update status only with evidence and commit**
+- [x] **Step 7: Update status only with evidence and commit**
 
 Mark only the Domain foundation row in the implementation roadmap complete after Step 6 and the empty-PostgreSQL migration proof pass. The overall design remains in implementation until all plans finish. Record test command outputs in the commit/PR description, not in generated environment reports.
 

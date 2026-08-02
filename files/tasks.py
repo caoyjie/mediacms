@@ -54,6 +54,7 @@ from .models import (
     TranscriptionRequest,
     VideoTrimRequest,
 )
+from .services.storage_backend import legacy_processing_allowed
 
 logger = get_task_logger(__name__)
 
@@ -133,8 +134,10 @@ def pre_trim_video_actions(media):
 def chunkize_media(self, friendly_token, profiles, force=True):
     """Break media in chunks and start encoding tasks"""
 
-    profiles = [EncodeProfile.objects.get(id=profile) for profile in profiles]
     media = Media.objects.get(friendly_token=friendly_token)
+    if not legacy_processing_allowed(media):
+        return False
+    profiles = [EncodeProfile.objects.get(id=profile) for profile in profiles]
     cwd = os.path.dirname(os.path.realpath(media.media_file.path))
     file_name = media.media_file.path.split("/")[-1]
     random_prefix = produce_friendly_token()
@@ -267,6 +270,8 @@ def encode_media(
         profile = EncodeProfile.objects.get(id=profile_id)
     except BaseException:
         Encoding.objects.filter(id=encoding_id).delete()
+        return False
+    if not legacy_processing_allowed(media):
         return False
 
     # break logic with chunk True/False
@@ -549,6 +554,8 @@ def produce_sprite_from_video(friendly_token):
     except BaseException:
         logger.info(f"failed to get media with friendly_token {friendly_token}")
         return False
+    if not legacy_processing_allowed(media):
+        return False
 
     with tempfile.TemporaryDirectory(dir=settings.TEMP_DIRECTORY) as tmpdirname:
         try:
@@ -593,6 +600,8 @@ def create_hls(friendly_token):
     except BaseException:
         logger.info(f"failed to get media with friendly_token {friendly_token}")
         return False
+    if not legacy_processing_allowed(media):
+        return False
 
     p = media.uid.hex
     output_dir = os.path.join(settings.HLS_DIR, p)
@@ -632,6 +641,8 @@ def media_init(friendly_token):
         media = Media.objects.get(friendly_token=friendly_token)
     except:  # noqa
         logger.info("failed to get media with friendly_token %s" % friendly_token)
+        return False
+    if not legacy_processing_allowed(media):
         return False
     media.media_init()
 
@@ -989,6 +1000,8 @@ def post_trim_action(friendly_token):
     except Media.DoesNotExist:
         logger.info(f"Media with friendly token {friendly_token} not found")
         return False
+    if not legacy_processing_allowed(media):
+        return False
 
     media.set_media_type()
     encodings = media.encodings.filter(status="success", profile__extension='mp4', chunk=False)
@@ -1020,6 +1033,8 @@ def video_trim_task(self, trim_request_id):
         trim_request = VideoTrimRequest.objects.get(id=trim_request_id)
     except VideoTrimRequest.DoesNotExist:
         logger.info(f"VideoTrimRequest with ID {trim_request_id} not found")
+        return False
+    if not legacy_processing_allowed(trim_request.media):
         return False
 
     trim_request.status = "running"

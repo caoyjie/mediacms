@@ -36,6 +36,7 @@ from ..methods import (
     is_mediacms_editor,
 )
 from ..models import Category, Media, Page, Playlist, Subtitle, Tag, VideoTrimRequest
+from ..services.storage_backend import legacy_processing_allowed
 from ..tasks import save_user_action, video_trim_task
 
 
@@ -526,6 +527,16 @@ def trim_video(request, friendly_token):
 
     if not (is_mediacms_editor(request.user) or request.user.has_contributor_access_to_media(media)):
         return HttpResponseRedirect("/")
+
+    if not legacy_processing_allowed(media):
+        return JsonResponse(
+            {
+                "success": False,
+                "error": "AWS media cannot use legacy video trimming",
+                "code": "legacy_processing_unavailable",
+            },
+            status=400,
+        )
 
     existing_requests = VideoTrimRequest.objects.filter(media=media, status__in=["initial", "running"]).exists()
 

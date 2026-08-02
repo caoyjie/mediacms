@@ -343,7 +343,10 @@ def post_user_create(sender, instance, created, **kwargs):
     if created:
         new = Channel.objects.create(title="default", user=instance)
         new.save()
-        if settings.ADMINS_NOTIFICATIONS.get("NEW_USER", False):
+        if (
+            not getattr(settings, "MEDIACMS_SINGLE_ADMIN_MODE", False)
+            and settings.ADMINS_NOTIFICATIONS.get("NEW_USER", False)
+        ):
             title = f"[{settings.PORTAL_NAME}] - New user just registered"
             msg = """
 User has just registered with email %s\n

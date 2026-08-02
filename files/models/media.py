@@ -316,8 +316,10 @@ class Media(models.Model):
                 # set this otherwise gets to infinite loop
                 self.__original_media_file = self.media_file
                 from .. import tasks
+                from ..services.storage_backend import legacy_processing_allowed
 
-                tasks.media_init.apply_async(args=[self.friendly_token], countdown=5)
+                if legacy_processing_allowed(self):
+                    tasks.media_init.apply_async(args=[self.friendly_token], countdown=5)
 
             # for video files, if user specified a different time
             # to automatically grub thumbnail
@@ -421,6 +423,10 @@ class Media(models.Model):
         Performs all related tasks, as check for media type,
         video duration, encode
         """
+        from ..services.storage_backend import legacy_processing_allowed
+
+        if not legacy_processing_allowed(self):
+            return False
         self.set_media_type()
         from ..methods import is_media_allowed_type
 
@@ -580,6 +586,10 @@ class Media(models.Model):
         """
 
         from .. import tasks
+        from ..services.storage_backend import legacy_processing_allowed
+
+        if not legacy_processing_allowed(self):
+            return False
 
         # Defer until the surrounding transaction commits so the worker can
         # actually find the Media row. Runs immediately if not in a tx.
@@ -593,6 +603,10 @@ class Media(models.Model):
         are created
         """
 
+        from ..services.storage_backend import legacy_processing_allowed
+
+        if not legacy_processing_allowed(self):
+            return False
         if not profiles:
             profiles = EncodeProfile.objects.filter(active=True)
         profiles = list(profiles)
@@ -638,6 +652,10 @@ class Media(models.Model):
         whether it has failed or succeeded
         """
 
+        from ..services.storage_backend import legacy_processing_allowed
+
+        if not legacy_processing_allowed(self):
+            return False
         self.set_encoding_status()
 
         # set a preview url
@@ -650,7 +668,13 @@ class Media(models.Model):
 
         self.save(update_fields=["encoding_status", "listable", "preview_file_path"])
 
-        if encoding and encoding.status == "success" and encoding.profile.codec == "h264" and action == "add" and not encoding.chunk:
+        if (
+            encoding
+            and encoding.status == "success"
+            and encoding.profile.codec == "h264"
+            and action == "add"
+            and not encoding.chunk
+        ):
             from .. import tasks
 
             tasks.create_hls.delay(self.friendly_token)
@@ -1079,8 +1103,13 @@ def media_save(sender, instance, created, **kwargs):
 
     if created:
         from ..methods import notify_users
+        from ..services.storage_backend import legacy_processing_allowed
 
-        if not (instance.external_hls_url or instance.external_poster_url or instance.external_cover_url):
+        if legacy_processing_allowed(instance) and not (
+            instance.external_hls_url
+            or instance.external_poster_url
+            or instance.external_cover_url
+        ):
             instance.media_init()
         notify_users(friendly_token=instance.friendly_token, action="media_added")
 

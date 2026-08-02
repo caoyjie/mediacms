@@ -1,9 +1,11 @@
+from unittest.mock import patch
+
 import pytest
 from django.contrib.admin.sites import AdminSite
 from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.db import IntegrityError, transaction
-from django.test import RequestFactory
+from django.test import RequestFactory, override_settings
 
 from users.admin import SiteAdministratorAdmin, UserAdmin
 from users.models import SiteAdministrator, User
@@ -114,3 +116,19 @@ def test_django_admin_only_exposes_bound_user(monkeypatch):
     assert not binding_admin.has_add_permission(request)
     assert not binding_admin.has_delete_permission(request)
     assert not binding_admin.has_change_permission(request)
+
+
+@pytest.mark.django_db
+@override_settings(MEDIACMS_SINGLE_ADMIN_MODE=True)
+def test_initialization_does_not_send_new_registration_email(monkeypatch):
+    monkeypatch.setenv("MEDIACMS_ADMIN_PASSWORD", "strong-test-password")
+
+    with patch("users.models.EmailMessage.send") as send_email:
+        call_command(
+            "init_site_administrator",
+            username="admin",
+            email="admin@example.invalid",
+            interactive=False,
+        )
+
+    send_email.assert_not_called()
