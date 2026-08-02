@@ -4,11 +4,12 @@ import { ThemeProvider } from './contexts/ThemeContext';
 import { LayoutProvider } from './contexts/LayoutContext';
 import { UserProvider } from './contexts/UserContext';
 import { inEmbeddedApp } from './helpers';
+import { MediaAuthorizationProvider } from './contexts/MediaAuthorizationContext';
 
 const AppProviders = ({ children }) => (
     <LayoutProvider>
         <ThemeProvider>
-            <UserProvider>{children}</UserProvider>
+            <UserProvider><MediaAuthorizationProvider>{children}</MediaAuthorizationProvider></UserProvider>
         </ThemeProvider>
     </LayoutProvider>
 );
