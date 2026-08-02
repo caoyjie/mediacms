@@ -54,7 +54,7 @@ Validated on 2026-08-02 in `us-east-1` without creating a Stack:
 - Both templates passed local `cfn-lint` and AWS CloudFormation `validate-template` using profile `default`.
 - The intended AWS account was confirmed without recording its account ID.
 - The account-derived dev bucket override returned an unambiguous 404 and was available at validation time.
-- Core template SHA-256: `a1b802ff18f3af96a5459810bce50b672de42d5aeb59fd5fb2ef5115393a94a6`.
+- Core template SHA-256: `dbd66d308e3afcd3b55b854a4ee633323773a074b6e991951d63719730e1e72a`.
 - Certificate template SHA-256: `3e0a93bdbc47a35a9a07cbebd3565a161775638a16622ce5fdfc1677aec83973`.
 
 Bucket availability is time-sensitive and must be checked again immediately before creating the initial Change Set.

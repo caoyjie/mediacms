@@ -200,7 +200,7 @@ Resources:
         CorsConfig:
           AccessControlAllowCredentials: true
           AccessControlAllowHeaders:
-            Items: ['*']
+            Items: [Accept, Content-Type, Origin, Range]
           AccessControlAllowMethods:
             Items: [GET, HEAD, OPTIONS]
           AccessControlAllowOrigins:
@@ -436,7 +436,7 @@ Resources:
       Description: Fixed QVBR HLS ladder; the coordinator removes renditions above source resolution before CreateJob.
       Name: !Sub '${ResourceNamePrefix}-video-hls-v1'
       Priority: 0
-      SettingsJson: |
+      SettingsJson:
         {
           "Inputs": [
             {
@@ -644,7 +644,7 @@ Resources:
       Description: Audio-only Apple HLS template.
       Name: !Sub '${ResourceNamePrefix}-audio-hls-v1'
       Priority: 0
-      SettingsJson: |
+      SettingsJson:
         {
           "Inputs": [
             {

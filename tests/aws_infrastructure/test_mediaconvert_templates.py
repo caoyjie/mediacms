@@ -18,8 +18,8 @@ def resource(name):
 
 def settings_json(name):
     value = resource(name)["Properties"]["SettingsJson"]
-    assert isinstance(value, str)
-    return json.loads(value)
+    assert isinstance(value, dict)
+    return value
 
 
 def hls_group(settings):

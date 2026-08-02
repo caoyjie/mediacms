@@ -121,6 +121,12 @@ def test_upload_cors_is_credentialed_and_limited_to_the_application_origin():
         "CorsConfig"
     ]
     assert cors_config["AccessControlAllowCredentials"] is True
+    assert cors_config["AccessControlAllowHeaders"]["Items"] == [
+        "Accept",
+        "Content-Type",
+        "Origin",
+        "Range",
+    ]
     assert cors_config["AccessControlAllowOrigins"]["Items"] == [
         {"Ref": "ApplicationOrigin"}
     ]
