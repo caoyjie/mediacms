@@ -2,6 +2,13 @@
 
 The templates create only the required private S3, IAM, Secrets Manager, MediaConvert and CloudFront resources in `us-east-1`. They do not create SNS, CloudWatch alarms or dashboards, custom metrics, EventBridge, SQS, monitoring Lambda resources or S3 Versioning.
 
+The Runtime policy grants `mediaconvert:Probe` for validated project originals and
+`mediaconvert:ListJobs` for recovery after an unknown CreateJob result. AWS does not
+support resource-level scoping for these two actions, so they share one explicit
+`Resource: '*'` statement. `GetJob` and `CancelJob` remain scoped to Job ARNs;
+MediaConvert `CreateJob`, S3 and `iam:PassRole` retain their existing tag, prefix and
+exact-role restrictions.
+
 All AWS commands use the `default` profile. Validate before creating a Change Set:
 
 ```bash

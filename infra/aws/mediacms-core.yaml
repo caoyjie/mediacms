@@ -374,6 +374,12 @@ Resources:
               - mediaconvert:GetJob
               - mediaconvert:CancelJob
             Resource: !Sub 'arn:${AWS::Partition}:mediaconvert:${AWS::Region}:${AWS::AccountId}:jobs/*'
+          - Sid: ProbeAndReconcileMediaConvertJobs
+            Effect: Allow
+            Action:
+              - mediaconvert:Probe
+              - mediaconvert:ListJobs
+            Resource: '*'
           - Sid: ReadMediaConvertTemplates
             Effect: Allow
             Action: mediaconvert:GetJobTemplate

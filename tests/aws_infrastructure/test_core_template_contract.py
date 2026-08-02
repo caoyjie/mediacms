@@ -258,6 +258,40 @@ def test_runtime_can_pass_only_the_mediaconvert_service_role():
     )
 
 
+def test_runtime_probe_and_list_jobs_use_one_minimal_wildcard_statement():
+    statements = runtime_policy_statements(load_template(CORE))
+    wildcard = [
+        statement
+        for statement in statements
+        if statement.get("Resource") == "*"
+        and set(as_list(statement["Action"]))
+        & {"mediaconvert:Probe", "mediaconvert:ListJobs"}
+    ]
+
+    assert len(wildcard) == 1
+    assert wildcard[0]["Sid"] == "ProbeAndReconcileMediaConvertJobs"
+    assert set(as_list(wildcard[0]["Action"])) == {
+        "mediaconvert:Probe",
+        "mediaconvert:ListJobs",
+    }
+    assert "Condition" not in wildcard[0]
+
+
+def test_new_mediaconvert_wildcard_does_not_expand_other_runtime_permissions():
+    statements = runtime_policy_statements(load_template(CORE))
+    wildcard_actions = {
+        action
+        for statement in statements
+        if statement.get("Resource") == "*"
+        for action in as_list(statement["Action"])
+    }
+
+    assert "mediaconvert:GetJob" not in wildcard_actions
+    assert "mediaconvert:CancelJob" not in wildcard_actions
+    assert not any(action.startswith("s3:") for action in wildcard_actions)
+    assert not any(action.startswith("iam:") for action in wildcard_actions)
+
+
 def test_mediaconvert_role_reads_originals_and_writes_candidates_only():
     role = load_template(CORE)["Resources"]["MediaConvertServiceRole"]
     statements = role["Properties"]["Policies"][0]["PolicyDocument"]["Statement"]
