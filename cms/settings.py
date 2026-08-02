@@ -215,6 +215,12 @@ AWS_MEDIACONVERT_TEMPLATE_VERSION = os.environ.get(
     "h264-hls-qvbr-v1",
 )
 AWS_ENVIRONMENT = os.environ.get("AWS_ENVIRONMENT", "dev")
+AWS_MEDIACONVERT_TOKEN_WINDOW_SECONDS = int(
+    os.environ.get("AWS_MEDIACONVERT_TOKEN_WINDOW_SECONDS", "60")
+)
+AWS_MEDIACONVERT_RECONCILIATION_LIMIT = int(
+    os.environ.get("AWS_MEDIACONVERT_RECONCILIATION_LIMIT", "3")
+)
 
 # these used to be os.path.join(MEDIA_ROOT, "folder/") but update to
 # Django 3.1.9 requires not absolute paths to be utilized...
