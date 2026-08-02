@@ -96,3 +96,29 @@ Validated on 2026-08-02 against PostgreSQL 17 and the deployed `mediacms-dev` St
 - The exact Multipart upload was aborted after verification; no object or incomplete Multipart upload remained.
 - The live check identified and fixed the `us-east-1` legacy presigning fallback by explicitly requiring Signature Version 4.
 - `deploy/scripts/smoke_browser_upload.py` reproduces the non-destructive check using the `default` profile and always attempts exact cleanup in `finally`.
+
+## Disposable MediaConvert acceptance
+
+After the runtime env, empty PostgreSQL database and `mediacms-dev` Stack are configured,
+run the serial acceptance command from the Arch test host:
+
+```bash
+set -a
+source /etc/mediacms/secrets/aws-runtime.env
+set +a
+POSTGRES_HOST=127.0.0.1 POSTGRES_PORT=55432 \
+POSTGRES_NAME=mediacms_test POSTGRES_USER=mediacms_test \
+POSTGRES_PASSWORD=mediacms_test_local_only \
+.venv/bin/python manage.py verify_mediaconvert_orchestration \
+  --video-source '/home/caoyujie/Videos/fitness/陈康/005.胸部-双杠臂屈伸动作讲解.mp4' \
+  --audio-source '/home/caoyujie/Videos/Marine英语课/新录音.mp3' \
+  --stack mediacms-dev --region us-east-1
+```
+
+The command derives only a private 20-second video and 30-second audio fixture,
+uploads each to a generated `uploads/{job_id}/{session_id}/` key, runs the real
+original-promotion and processing Tick path strictly serially, and prints only
+MediaConvert Job IDs, template versions and terminal status. `finally` removes the
+temporary local directory, all tracked S3 keys and the isolated PostgreSQL rows;
+it never writes to either source file. A failed command is not evidence of cleanup
+success until the generated prefixes and rows are checked explicitly.

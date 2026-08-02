@@ -15,7 +15,7 @@
 | 1 | ✅ Domain foundation（完成） | Media兼容字段、Job/Attempt/Checkpoint、AssetVersion、FIFO Lease、唯一管理员 | 无 |
 | 2 | ✅ AWS infrastructure（完成） | 最小化S3/IAM/CloudFront/MediaConvert模板、dev Stack | ACM自定义域名部分等待实际域名 |
 | 3 | ✅ Browser ingestion（完成） | Multipart API、恢复对账、HLS ZIP对象清单和上传租约 | 无 |
-| 4 | Processing orchestration | 来源检查点执行器、MediaConvert协调、原子激活、取消和cleanup | 依赖AWS dev Stack |
+| 4 | ✅ Processing orchestration（完成） | 来源检查点执行器、MediaConvert协调、原子激活、取消和cleanup、单动作Tick与PostgreSQL reconciler | 依赖AWS dev Stack |
 | 5 | YouTube and subtitles | yt-dlp、加密Cookie、三轨WebVTT、无字幕和Resume | 依赖S3与编排 |
 | 6 | CloudFront playback | Cookie Bootstrap、续期、资源授权和播放进度API | 最终自定义域名E2E等待Cloudflare门 |
 | 7 | Frontend ingestion and tasks | Add Media、UploadEngine、Task Center、历史汇总和通知 | API契约完成即可开发 |
@@ -48,4 +48,4 @@
 
 ## 当前执行入口
 
-Domain foundation、AWS infrastructure 和 Browser ingestion 已完成验证。`mediacms-dev` Stack 已部署，浏览器直传文件与本地解包 HLS 的管理员 API 已通过 PostgreSQL 17 测试和真实私有 S3 SigV4 Multipart 冒烟验证；验证对象与 Multipart 均已精确清理。下一步实施 Processing orchestration，ACM 自定义域名继续等待 Cloudflare 外部门禁且不阻塞开发。
+Domain foundation、AWS infrastructure、Browser ingestion 和 Processing orchestration 已完成本地/集成验证。`mediacms-dev` Stack 已部署，浏览器直传文件与本地解包 HLS 的管理员 API 已通过 PostgreSQL 17 测试和真实私有 S3 SigV4 Multipart 冒烟验证；验证对象与 Multipart 均已精确清理。下一步执行 Task 13 的真实短视频/音频串行验收，ACM 自定义域名继续等待 Cloudflare 外部门禁且不阻塞开发。

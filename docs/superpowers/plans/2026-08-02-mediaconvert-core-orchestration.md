@@ -332,13 +332,13 @@ def run_processing_tick(owner_token: str, now=None) -> "TickResult": ...
 - Command arguments `--video-source`, `--audio-source`, `--stack mediacms-dev`, `--region us-east-1`.
 - Produces a non-secret PASS summary and always executes exact cleanup.
 
-- [ ] **Step 1: Write mocked command tests.** Validate source existence, refuse symlinks/non-files, build FFmpeg argument lists without shell, video 20s/audio 30s, and cleanup in `finally` on every failure.
-- [ ] **Step 2: Implement fixture preparation.** Use a private `mkdtemp` directory; try stream copy, validate with FFprobe, then compatibility-encode only the disposable derivative if required.
-- [ ] **Step 3: Implement strict serial acceptance.** Create isolated DB/upload-session state, place each derivative beneath its generated `uploads/` key, invoke the real completion promotion, then run synchronous ticks through ready+cleanup for video followed by audio; record Job IDs/template versions/status only.
-- [ ] **Step 4: Implement cleanup guard.** Delete only command-created S3 keys and DB rows after checking IDs/prefixes; local temp directory always removed; source files never opened for write.
-- [ ] **Step 5: Run all local gates first.** PostgreSQL suites, infrastructure tests, flake8, migration checks, CloudFormation validation and secret scan.
-- [ ] **Step 6: Run real dev acceptance** with the administrator-approved source paths as CLI arguments. Confirm no verification S3 object/Multipart or test DB record remains.
-- [ ] **Step 7: Record non-secret evidence, mark roadmap phase 4 core complete and commit:** `git commit -m "docs: verify mediaconvert core orchestration"`.
+- [x] **Step 1: Write mocked command tests.** Validate source existence, refuse symlinks/non-files, build FFmpeg argument lists without shell, video 20s/audio 30s, and cleanup in `finally` on every failure.
+- [x] **Step 2: Implement fixture preparation.** Use a private `mkdtemp` directory; try stream copy, validate with FFprobe, then compatibility-encode only the disposable derivative if required.
+- [x] **Step 3: Implement strict serial acceptance.** Create isolated DB/upload-session state, place each derivative beneath its generated `uploads/` key, invoke the real completion promotion, then run synchronous ticks through ready+cleanup for video followed by audio; record Job IDs/template versions/status only.
+- [x] **Step 4: Implement cleanup guard.** Delete only command-created S3 keys and DB rows after checking IDs/prefixes; local temp directory always removed; source files never opened for write.
+- [x] **Step 5: Run all local gates first.** PostgreSQL suites, infrastructure tests, flake8, migration checks, CloudFormation validation and secret scan.
+- [x] **Step 6: Run real dev acceptance** with the administrator-approved source paths as CLI arguments. Confirm no verification S3 object/Multipart or test DB record remains.
+- [x] **Step 7: Record non-secret evidence, mark roadmap phase 4 core complete and commit:** `git commit -m "docs: verify mediaconvert core orchestration"`.
 
 ## Completion Gate
 

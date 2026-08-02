@@ -4,7 +4,7 @@ from hashlib import sha256
 
 from django.conf import settings
 
-from files.services.media_probe import SourceFacts, allowed_video_heights
+from files.services.media_probe import allowed_video_heights
 
 
 class InvalidMediaConvertEvidence(RuntimeError):
@@ -310,6 +310,7 @@ def _provider_snapshot(response):
     output_details = job.get("OutputGroupDetails", [])
     if not isinstance(warnings, list) or not isinstance(output_details, list):
         raise InvalidMediaConvertEvidence("MediaConvert returned invalid output evidence.")
+    output_details = _complete_output_group_paths(job, output_details)
     return ProviderSnapshot(
         job_id=job_id,
         status=status,
@@ -318,6 +319,76 @@ def _provider_snapshot(response):
         warnings=tuple(warnings),
         output_group_details=tuple(output_details),
     )
+
+
+def _complete_output_group_paths(job, output_details):
+    """Combine GetJob output timing evidence with immutable job settings.
+
+    MediaConvert's GetJob response does not include output paths for every
+    completed job. The submitted Settings contain the exact destinations and
+    name modifiers, so derive only those deterministic paths when the provider
+    omitted them; never invent paths when a provider supplied contradictory
+    business evidence.
+    """
+    groups = job.get("Settings", {}).get("OutputGroups", [])
+    if not isinstance(groups, list) or len(groups) != len(output_details):
+        return output_details
+    completed = []
+    for detail, group in zip(output_details, groups):
+        if not isinstance(detail, dict) or detail.get("Type"):
+            completed.append(detail)
+            continue
+        settings_group = group.get("OutputGroupSettings", {})
+        group_type = settings_group.get("Type")
+        if group_type == "HLS_GROUP_SETTINGS":
+            hls = settings_group.get("HlsGroupSettings", {})
+            destination = hls.get("Destination")
+            outputs = group.get("Outputs", [])
+            if not isinstance(destination, str) or not isinstance(outputs, list):
+                completed.append(detail)
+                continue
+            playlists = [f"{destination}.m3u8"]
+            variants = []
+            for output in outputs:
+                modifier = output.get("NameModifier")
+                if not isinstance(modifier, str) or not modifier:
+                    variants = []
+                    break
+                variants.append(f"{destination}{modifier}.m3u8")
+            if not variants:
+                completed.append(detail)
+                continue
+            enriched = dict(detail)
+            enriched["Type"] = "HLS_GROUP"
+            enriched["PlaylistFilePaths"] = playlists
+            enriched["OutputDetails"] = [
+                {"OutputFilePaths": [path]} for path in variants
+            ]
+            completed.append(enriched)
+        elif group_type == "FILE_GROUP_SETTINGS":
+            file_settings = settings_group.get("FileGroupSettings", {})
+            destination = file_settings.get("Destination")
+            outputs = group.get("Outputs", [])
+            if not isinstance(destination, str) or not isinstance(outputs, list):
+                completed.append(detail)
+                continue
+            paths = []
+            for output in outputs:
+                modifier = output.get("NameModifier")
+                if not isinstance(modifier, str) or not modifier:
+                    paths = []
+                    break
+                paths.append(f"{destination}{modifier}.0000000.jpg")
+            if not paths:
+                completed.append(detail)
+                continue
+            enriched = dict(detail)
+            enriched["Type"] = "FILE_GROUP"
+            enriched["OutputDetails"] = [{"OutputFilePaths": [path]} for path in paths]
+            completed.append(enriched)
+        else:
+            completed.append(detail)
+    return completed
 
 
 def _default_client():
