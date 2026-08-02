@@ -98,6 +98,7 @@ def test_part_number_is_unique_per_object(upload_object):
         part_number=1,
         etag='"etag-a"',
         size=5 * 1024 * 1024,
+        checksum_sha256="checksum-a",
     )
     with pytest.raises(IntegrityError), transaction.atomic():
         BrowserUploadPart.objects.create(
@@ -105,6 +106,7 @@ def test_part_number_is_unique_per_object(upload_object):
             part_number=1,
             etag='"etag-b"',
             size=5 * 1024 * 1024,
+            checksum_sha256="checksum-b",
         )
 
 
@@ -117,6 +119,7 @@ def test_part_number_must_be_in_s3_range(upload_object, part_number):
             part_number=part_number,
             etag='"etag"',
             size=1,
+            checksum_sha256="checksum",
         )
 
 

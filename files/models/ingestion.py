@@ -2,7 +2,7 @@ import uuid
 
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
-from django.db.models import Q
+from django.db.models import Exists, OuterRef, Q
 from django.utils import timezone
 
 
@@ -45,7 +45,17 @@ class CheckpointStatus(models.TextChoices):
 
 class MediaIngestionJobQuerySet(models.QuerySet):
     def queued(self):
-        return self.filter(status=JobStatus.QUEUED).order_by("queued_at", "id")
+        from .uploads import BrowserUploadSession
+
+        incomplete_upload = BrowserUploadSession.objects.filter(
+            job_id=OuterRef("pk"),
+        ).exclude(status="completed")
+        return (
+            self.filter(status=JobStatus.QUEUED)
+            .annotate(has_incomplete_upload=Exists(incomplete_upload))
+            .filter(has_incomplete_upload=False)
+            .order_by("queued_at", "id")
+        )
 
 
 class MediaIngestionJob(models.Model):

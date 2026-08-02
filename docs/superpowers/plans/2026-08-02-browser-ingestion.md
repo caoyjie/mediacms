@@ -85,7 +85,7 @@
 - Create: `files/services/upload_sessions.py`
 - Create: `tests/aws_ingestion/test_upload_sessions.py`
 
-**Interfaces:** `CreateFileSession`; `create_file_session`, `issue_part_urls`, `reconcile_parts`, `complete_file_upload`, `get_resume_snapshot`, `pause_upload`, `cancel_upload`.
+**Interfaces:** `CreateFileSession`; `create_file_session`, `issue_part_urls`, `reconcile_parts`, `complete_file_upload`, `get_resume_snapshot`, `pause_upload`, `resume_upload`, `cancel_upload`.
 
 - [ ] **Step 1: Write failing create/idempotency tests.** The same key/payload returns one draft AWS Media, Job, Session and Object; conflicting reuse is `409`; extensions/types are allowlisted.
 - [ ] **Step 2: Verify RED, implement transactional creation** and confirm processing is not queued yet.

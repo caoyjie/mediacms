@@ -79,6 +79,7 @@ class Migration(migrations.Migration):
                 ('part_number', models.PositiveIntegerField()),
                 ('etag', models.CharField(max_length=255)),
                 ('size', models.PositiveBigIntegerField()),
+                ('checksum_sha256', models.CharField(max_length=255)),
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('updated_at', models.DateTimeField(auto_now=True)),
                 ('upload_object', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='parts', to='files.browseruploadobject')),
