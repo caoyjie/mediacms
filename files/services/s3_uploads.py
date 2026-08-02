@@ -38,8 +38,13 @@ class S3ObjectEvidence:
 
 def _default_s3_client():
     import boto3
+    from botocore.config import Config
 
-    return boto3.client("s3", region_name=settings.AWS_REGION)
+    return boto3.client(
+        "s3",
+        region_name=settings.AWS_REGION,
+        config=Config(signature_version="s3v4"),
+    )
 
 
 def _exact_upload_key(key):

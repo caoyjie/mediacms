@@ -73,3 +73,13 @@ The `mediacms-dev` Stack reached `CREATE_COMPLETE` on 2026-08-02 after the exact
 - The protected dev runtime env is installed outside the repository with owner `root`, group `caoyujie` and mode `0640`; its values were not printed or committed.
 
 The optional ACM/custom-domain Stack remains undeployed until the Cloudflare DNS gate is opened.
+
+## Browser ingestion acceptance evidence
+
+Validated on 2026-08-02 against PostgreSQL 17 and the deployed `mediacms-dev` Stack:
+
+- Browser ingestion/domain tests passed with strict FIFO upload leases, resumable file uploads, browser-expanded HLS validation and administrator-only API coverage.
+- A real SigV4 presigned Multipart Part was uploaded beneath an isolated `uploads/verification/browser-ingestion-{uuid}/` prefix and reconciled through `ListParts`.
+- The exact Multipart upload was aborted after verification; no object or incomplete Multipart upload remained.
+- The live check identified and fixed the `us-east-1` legacy presigning fallback by explicitly requiring Signature Version 4.
+- `deploy/scripts/smoke_browser_upload.py` reproduces the non-destructive check using the `default` profile and always attempts exact cleanup in `finally`.

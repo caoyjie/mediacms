@@ -1,4 +1,6 @@
 import base64
+import sys
+from types import SimpleNamespace
 
 import pytest
 
@@ -6,6 +8,7 @@ from files.services.s3_uploads import (
     InvalidUploadObjectKey,
     S3Part,
     S3UploadGateway,
+    _default_s3_client,
 )
 
 
@@ -219,3 +222,19 @@ def test_presign_rejects_invalid_sha256_before_calling_s3(gateway, client):
     with pytest.raises(ValueError, match="SHA-256"):
         gateway.presign_part(KEY, "s3-upload", 1, "not-base64")
     assert client.calls == []
+
+
+def test_default_client_forces_signature_v4(settings, monkeypatch):
+    calls = []
+    settings.AWS_REGION = "us-east-1"
+    monkeypatch.setitem(
+        sys.modules,
+        "boto3",
+        SimpleNamespace(client=lambda *args, **kwargs: calls.append((args, kwargs)) or object()),
+    )
+
+    _default_s3_client()
+
+    assert calls[0][0] == ("s3",)
+    assert calls[0][1]["region_name"] == "us-east-1"
+    assert calls[0][1]["config"].signature_version == "s3v4"
