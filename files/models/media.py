@@ -35,6 +35,7 @@ from .utils import (
     validate_external_media_url,
 )
 from .video_data import VideoTrimRequest
+from ..services.asset_urls import active_asset_url
 
 logger = logging.getLogger(__name__)
 
@@ -824,6 +825,10 @@ class Media(models.Model):
         that is auto-generated
         """
 
+        if self.storage_backend == StorageBackend.AWS:
+            aws_url = active_asset_url(self, "thumbnail", filename="thumbnail.jpg")
+            if aws_url:
+                return aws_url
         if self.external_cover_url:
             return self.external_cover_url
         if self.uploaded_thumbnail:
@@ -841,6 +846,10 @@ class Media(models.Model):
         that is auto-generated
         """
 
+        if self.storage_backend == StorageBackend.AWS:
+            aws_url = active_asset_url(self, "poster", filename="poster.jpg")
+            if aws_url:
+                return aws_url
         if self.external_poster_url:
             return self.external_poster_url
         if self.uploaded_poster:
@@ -889,6 +898,14 @@ class Media(models.Model):
         """
 
         ret = []
+        if self.storage_backend == StorageBackend.AWS and self.active_asset_version_id:
+            for asset in self.active_asset_version.assets.filter(kind="subtitle").order_by("s3_key"):
+                language = asset.s3_key.rsplit("/", 1)[-1].split(".", 1)[0]
+                url = active_asset_url(self, "subtitle", filename=asset.s3_key.rsplit("/", 1)[-1])
+                if url:
+                    ret.append({"src": url, "srclang": language, "label": {"zh": "中文", "en": "English", "bilingual": "中文 / English"}.get(language, language)})
+            if ret:
+                return ret
         # Retrieve all subtitles and sort by the first letter of their associated language's title
         sorted_subtitles = sorted(self.subtitles.all(), key=lambda s: s.language.title[0])
         for subtitle in sorted_subtitles:
@@ -934,6 +951,10 @@ class Media(models.Model):
         """
 
         res = {}
+        if self.storage_backend == StorageBackend.AWS:
+            master = active_asset_url(self, "hls_master", filename="master.m3u8")
+            if master:
+                return {"master_file": master}
         if self.external_hls_url:
             return {"master_file": self.external_hls_url}
         valid_resolutions = [144, 240, 360, 480, 720, 1080, 1440, 2160]
