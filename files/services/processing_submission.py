@@ -60,7 +60,7 @@ def _original_source(attempt):
         key=artifact.s3_key,
         size=artifact.size_bytes,
         content_type=artifact.content_type,
-        checksum_sha256=artifact.checksum,
+        checksum=artifact.checksum,
     )
 
 
@@ -81,7 +81,7 @@ def _immutable_evidence(attempt, source, source_facts, request, fingerprint):
         "template_version": settings.AWS_MEDIACONVERT_TEMPLATE_VERSION,
         "client_request_token": request["ClientRequestToken"],
         "input_key": source.key,
-        "input_checksum": source.checksum_sha256,
+        "input_checksum": source.checksum,
         "candidate_prefix": f"candidates/{attempt.job.media_id}/{attempt.id}/",
         "source_facts": _facts_dict(source_facts),
         "request_fingerprint": fingerprint,

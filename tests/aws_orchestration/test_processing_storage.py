@@ -108,7 +108,7 @@ def test_head_returns_immutable_checksum_evidence(gateway, client):
         key="originals/media/attempt/source.mp4",
         size=42,
         content_type="video/mp4",
-        checksum_sha256=CHECKSUM,
+        checksum=f"sha256:{CHECKSUM}",
     )
     with pytest.raises(AttributeError):
         evidence.size = 1
@@ -122,6 +122,18 @@ def test_head_returns_immutable_checksum_evidence(gateway, client):
             },
         )
     ]
+
+
+def test_head_accepts_s3_default_crc64_checksum(gateway, client):
+    client.head_object = lambda **kwargs: {
+        "ContentLength": 42,
+        "ContentType": "video/mp2t",
+        "ChecksumCRC64NVME": "crc-value",
+    }
+
+    evidence = gateway.head_exact("candidates/media/attempt/hls/segment.ts")
+
+    assert evidence.checksum == "crc64nvme:crc-value"
 
 
 def test_presign_get_is_sigv4_bound_to_configured_bucket(gateway, client):

@@ -117,7 +117,7 @@ def test_completion_copies_to_attempt_original_before_checkpoint_and_queue(prepa
         "s3_key": destination,
         "size": 6_000_000,
         "content_type": "video/mp4",
-        "checksum_sha256": "original-sha256",
+        "checksum": "original-sha256",
     }
     assert set(
         AttemptArtifact.objects.filter(attempt=checkpoint.attempt).values_list(

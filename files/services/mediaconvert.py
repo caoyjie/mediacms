@@ -222,7 +222,7 @@ def build_job_request(attempt, source, facts):
         "ClientRequestToken": submission_token(
             attempt.id,
             template_version,
-            source.checksum_sha256,
+            source.checksum,
         ),
         "Tags": {
             "Project": "mediacms",

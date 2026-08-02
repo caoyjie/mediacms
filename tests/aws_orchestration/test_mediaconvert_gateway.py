@@ -62,7 +62,7 @@ def source_for(attempt, suffix="mp4"):
         key=f"originals/{attempt.job.media_id}/{attempt.id}/source.{suffix}",
         size=42,
         content_type="video/mp4" if suffix == "mp4" else "audio/mpeg",
-        checksum_sha256="source-sha256",
+        checksum="sha256:source-sha256",
     )
 
 
@@ -91,7 +91,7 @@ def test_video_request_filters_ladder_and_sets_deterministic_safe_contract(attem
     assert request["ClientRequestToken"] == submission_token(
         attempt.id,
         TEMPLATE_VERSION,
-        "source-sha256",
+        "sha256:source-sha256",
     )
     assert request["Settings"]["Inputs"] == [
         {
@@ -179,7 +179,7 @@ def test_request_rejects_source_key_or_media_mismatch(attempt):
         key="originals/other/attempt/source.mp4",
         size=42,
         content_type="video/mp4",
-        checksum_sha256="sha256",
+        checksum="sha256:sha256",
     )
     with pytest.raises(ValueError, match="attempt original"):
         build_job_request(

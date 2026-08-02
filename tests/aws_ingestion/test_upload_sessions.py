@@ -91,7 +91,7 @@ class RecordingPromotionStorage:
             key=key,
             size=32_000_000,
             content_type="video/mp4",
-            checksum_sha256="promoted-checksum",
+            checksum="sha256:promoted-checksum",
         )
 
 
@@ -368,7 +368,7 @@ def test_completion_uses_s3_evidence_and_only_queues_processing(
         "s3_key": upload_object.promoted_s3_key,
         "size": 32_000_000,
         "content_type": "video/mp4",
-        "checksum_sha256": "promoted-checksum",
+        "checksum": "sha256:promoted-checksum",
     }
     assert len(gateway.complete_calls) == 1
     assert acquire_head_job("processing-worker", 60).job_id == job.id

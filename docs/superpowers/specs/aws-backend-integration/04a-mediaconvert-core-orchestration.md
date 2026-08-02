@@ -113,9 +113,9 @@ flowchart TD
 
 ## 6. 输出验证与发布
 
-`GetJob=COMPLETE` 后使用 `outputGroupDetails`：HLS的 `playlistFilePaths` 指向master，`outputFilePaths`指向variant；Frame Capture的 `outputFilePaths`指向最终图片。所有路径必须属于本Attempt的candidate根。
+`GetJob=COMPLETE` 后使用 `outputGroupDetails`：响应中的 `type=HLS_GROUP` 以 `playlistFilePaths` 指向master、`outputFilePaths`指向variant；`type=FILE_GROUP` 的Frame Capture以 `outputFilePaths`指向最终图片。这里使用的是完成响应类型，不是提交设置中的 `HLS_GROUP_SETTINGS` / `FILE_GROUP_SETTINGS`。所有路径必须属于本Attempt的candidate根。
 
-视频要求唯一master、至少一个variant和一张Frame Capture图片；音频要求唯一master和至少一个音频variant，不要求图片或分辨率。Manifest限制大小和UTF-8文本，拒绝外部URI、路径逃逸、加密引用、意外Bucket与缺失对象。从AWS返回路径递归解析到segment/init-map，对每个对象Head验证非零大小、允许Content-Type和可用checksum。
+视频要求唯一master、至少一个variant和一张Frame Capture图片；音频要求唯一master和至少一个音频variant，不要求图片或分辨率。Manifest限制大小和UTF-8文本，拒绝外部URI、路径逃逸、加密引用、意外Bucket与缺失对象。从AWS返回路径递归解析到segment/init-map，对每个对象Head验证非零大小、允许Content-Type和可用checksum。checksum按S3实际返回的算法和值保存（例如 `sha256:<value>` 或 `crc64nvme:<value>`）；MediaConvert输出不得假定一定存在 `ChecksumSHA256`，也不为重新计算SHA-256下载媒体对象。
 
 新增 `AttemptArtifact` 保存Attempt产生或接管的精确S3 Key、用途、大小、checksum和cleanup状态。原件提升时登记upload暂存Key与original Key；MediaConvert COMPLETE后允许列举仅由服务端生成的本Attempt candidate前缀，把所有结果先登记为Artifact，再从manifest闭包选择可发布的业务Asset。未知或多余对象不进入 `MediaAssetVersion`，但作为cleanup-only Artifact保留精确删除证据。这里的List只做受管Attempt输出盘点，不能通过扫描Bucket推断Media或版本归属。
 

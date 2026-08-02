@@ -17,7 +17,22 @@ class ObjectEvidence:
     key: str
     size: int
     content_type: str
-    checksum_sha256: str
+    checksum: str
+
+
+def _stored_checksum(response):
+    algorithms = (
+        ("sha256", "ChecksumSHA256"),
+        ("sha1", "ChecksumSHA1"),
+        ("crc64nvme", "ChecksumCRC64NVME"),
+        ("crc32c", "ChecksumCRC32C"),
+        ("crc32", "ChecksumCRC32"),
+    )
+    for algorithm, field in algorithms:
+        value = response.get(field)
+        if isinstance(value, str) and value:
+            return f"{algorithm}:{value}"
+    raise InvalidObjectEvidence("S3 returned no stored object checksum.")
 
 
 def _default_s3_client():
@@ -96,11 +111,11 @@ class ProcessingStorageGateway:
                 key=exact_key,
                 size=response["ContentLength"],
                 content_type=response["ContentType"],
-                checksum_sha256=response["ChecksumSHA256"],
+                checksum=_stored_checksum(response),
             )
         except (KeyError, TypeError) as error:
             raise InvalidObjectEvidence("S3 returned incomplete object evidence.") from error
-        if evidence.size <= 0 or not evidence.content_type or not evidence.checksum_sha256:
+        if evidence.size <= 0 or not evidence.content_type or not evidence.checksum:
             raise InvalidObjectEvidence("S3 returned invalid object evidence.")
         return evidence
 

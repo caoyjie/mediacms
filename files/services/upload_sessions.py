@@ -570,7 +570,7 @@ def _verify_promoted_object(upload_object, destination, evidence):
         raise UploadVerificationFailed("Promoted S3 object size does not match.")
     if evidence.content_type != upload_object.content_type:
         raise UploadVerificationFailed("Promoted S3 object content type does not match.")
-    if not evidence.checksum_sha256:
+    if not evidence.checksum:
         raise UploadVerificationFailed("Promoted S3 object checksum is unavailable.")
 
 
@@ -579,7 +579,7 @@ def _artifact_evidence(artifact):
         key=artifact.s3_key,
         size=artifact.size_bytes,
         content_type=artifact.content_type,
-        checksum_sha256=artifact.checksum,
+        checksum=artifact.checksum,
     )
 
 
@@ -669,7 +669,7 @@ def promote_file_original(session_id, gateway):
         ).update(
             size_bytes=evidence.size,
             content_type=evidence.content_type,
-            checksum=evidence.checksum_sha256,
+            checksum=evidence.checksum,
             safe_error="",
         )
         upload_object.promotion_status = PromotionStatus.VERIFIED
@@ -709,7 +709,7 @@ def _finalize_file_completion(session_id, upload_object_id, evidence):
                     "s3_key": evidence.key,
                     "size": evidence.size,
                     "content_type": evidence.content_type,
-                    "checksum_sha256": evidence.checksum_sha256,
+                    "checksum": evidence.checksum,
                 },
                 "completed_at": timezone.now(),
             },
