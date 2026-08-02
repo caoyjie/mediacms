@@ -105,14 +105,14 @@ stateDiagram-v2
 - 默认 `SINGLE_PASS_HQ + QVBR`，不设置 `MaxAverageBitrate`。
 - 低于源分辨率或会导致放大的 rendition 不生成；因此实际 master 可以少于四档。
 - 若验收证明质量不足，再新建 `MULTI_PASS_HQ` 高质量模板，不能原地改变既有模板语义。
-- 首版模板名为 `mediacms-video-hls-v1`，Attempt 保存相同的 `template_version=h264-hls-qvbr-v1`。
+- 生产首版模板名为 `mediacms-video-hls-v1`；为允许同账户同区域的 dev/prod 独立共存，开发模板名为 `mediacms-dev-video-hls-v1`。两者的 Attempt 都保存逻辑版本 `template_version=h264-hls-qvbr-v1`，CloudFormation Rules 固定环境与资源名前缀的对应关系。
 
 ### 5.2 音频
 
 - 单个音频文件由 MediaConvert 输出私有音频 HLS。
 - 封面优先级：管理员上传 → 来源图片 → 系统默认音频封面。
 - 不伪造视频分辨率；播放器使用音频模式。
-- 首版模板名为 `mediacms-audio-hls-v1`；输入/输出路径、IAM Role、标签和必要来源差异在提交时覆盖。
+- 生产首版模板名为 `mediacms-audio-hls-v1`，开发模板名为 `mediacms-dev-audio-hls-v1`；输入/输出路径、IAM Role、标签和必要来源差异在提交时覆盖。
 
 ### 5.3 HLS 导入的缩略图
 

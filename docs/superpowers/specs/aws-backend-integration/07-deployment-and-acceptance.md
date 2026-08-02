@@ -34,7 +34,7 @@ Cloudflare Tunnel 只路由页面/API。Nginx、Django 和容器请求体限制�
 
 - 私有 S3 Bucket（默认 `mediacms-${AWS::AccountId}-us-east-1`）、加密、CORS、Block Public Access 和生命周期规则。
 - MediaConvert Service Role 与最小 Bucket 前缀权限。
-- `mediacms-video-hls-v1` 与 `mediacms-audio-hls-v1` 两个版本化 Job Template。
+- 生产使用 `mediacms-video-hls-v1` 与 `mediacms-audio-hls-v1`；开发使用带 `mediacms-dev-` 前缀的同版本 Job Template，避免同账户同区域命名冲突。
 - 应用 IAM Runtime User/Policy、A/B AccessKey 槽位和 Secrets Manager 运行时凭证。
 - AWS 外部生产机使用独立 IAM Runtime User；CloudFormation 创建 AccessKey 并保存到 Secrets Manager，Stack 不输出密钥值。管理员读取一次后写入生产机权限为 `0640` 的 `/etc/mediacms/secrets/aws-runtime.env`，Compose 只通过 `env_file` 注入 Web/Worker。
 - CloudFront Distribution、OAC、Key Group、公钥及缓存行为。
