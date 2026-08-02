@@ -48,4 +48,4 @@
 
 ## 当前执行入口
 
-Domain foundation、AWS infrastructure、Browser ingestion、Processing orchestration 和 Task 13 视频/音频验收已完成本地/集成验证。`mediacms-dev` Stack 已部署，真实 MediaConvert 视频/音频任务已串行通过并精确清理。下一步是 Task 5 YouTube/字幕后端；CloudFront 播放授权、任务中心 API、播放进度 API 和生产交付仍未完成，ACM 自定义域名继续等待 Cloudflare 外部门禁且不阻塞这些开发。
+Domain foundation、AWS infrastructure、Browser ingestion、Processing orchestration 和 Task 13 视频/音频验收已完成本地/集成验证。`mediacms-dev` Stack 已部署，真实 MediaConvert 视频/音频任务已串行通过并精确清理。Task 5 已完成 YouTube 单视频/字幕纯服务层、加密 Cookie 模型与迁移；下一步是把它接入 Job 创建、单队列 Runner、Resume API 和字幕资源发布。CloudFront 播放授权、任务中心 API、播放进度 API 和生产交付仍未完成，ACM 自定义域名继续等待 Cloudflare 外部门禁且不阻塞这些开发。
