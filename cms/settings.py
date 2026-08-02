@@ -195,6 +195,12 @@ STATIC_ROOT = BASE_DIR + "/static/"
 # where uploaded + encoded media are stored
 MEDIA_ROOT = BASE_DIR + "/media_files/"
 
+# Private AWS media storage. Credentials use boto3's standard credential chain.
+AWS_MEDIA_BUCKET = os.environ.get("AWS_MEDIA_BUCKET", "")
+AWS_REGION = os.environ.get("AWS_REGION", "us-east-1")
+AWS_UPLOAD_PRESIGN_TTL_SECONDS = int(os.environ.get("AWS_UPLOAD_PRESIGN_TTL_SECONDS", "900"))
+AWS_UPLOAD_PART_SIZE = int(os.environ.get("AWS_UPLOAD_PART_SIZE", str(16 * 1024 * 1024)))
+
 # these used to be os.path.join(MEDIA_ROOT, "folder/") but update to
 # Django 3.1.9 requires not absolute paths to be utilized...
 

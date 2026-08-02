@@ -1,4 +1,5 @@
 Django==5.2.6
+boto3>=1.39,<2
 djangorestframework==3.16.1
 python3-saml==1.16.0
 django-allauth==65.4.1

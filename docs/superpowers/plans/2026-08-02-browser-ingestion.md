@@ -75,7 +75,7 @@
 
 - [ ] **Step 1: Write failing recording-fake tests** proving every call is bound to configured Bucket, generated key, upload ID, Part number and TTL; cover pagination, quoted ETags, checksum evidence, and rejection of keys outside `uploads/`.
 - [ ] **Step 2: Verify RED** on missing adapter.
-- [ ] **Step 3: Add `boto3==1.40.38` and settings** `AWS_MEDIA_BUCKET`, `AWS_REGION=us-east-1`, `AWS_UPLOAD_PRESIGN_TTL_SECONDS=900`, `AWS_UPLOAD_PART_SIZE=16777216`; implement a lazy boto3 factory so fake-client tests do not import boto3.
+- [ ] **Step 3: Add `boto3>=1.39,<2` and settings** `AWS_MEDIA_BUCKET`, `AWS_REGION=us-east-1`, `AWS_UPLOAD_PRESIGN_TTL_SECONDS=900`, `AWS_UPLOAD_PART_SIZE=16777216`; implement a lazy boto3 factory so fake-client tests do not import boto3.
 - [ ] **Step 4: Stop at dependency gate.** Administrator runs `uv pip install --python .venv/bin/python -r requirements-dev.txt`, then verifies `import boto3`. Expected boto3/botocore/s3transfer/jmespath footprint is under roughly 30 MiB.
 - [ ] **Step 5: Verify GREEN and commit:** focused pytest, then `git commit -m "feat: add private s3 upload adapter"`.
 
