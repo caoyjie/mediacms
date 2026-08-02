@@ -40,7 +40,7 @@ sequenceDiagram
 1. 管理员选择本地文件并填写标题、标签等元数据。
 2. Django 创建草稿和会话；任务取得唯一上传租约后，浏览器按固定 Part 大小上传。实现可在同一文件内部使用少量Part网络并行，但不得同时上传第二个任务。
 3. 暂停时停止新请求；已完成 Part 保留。刷新后重新选择同一文件或通过 File System Access 能力恢复句柄，再核对指纹。
-4. 上传完成后后端验证对象，将其登记/移动到该 Attempt 的原件 Key，并将 Job 放入 FIFO 队列。
+4. 上传完成后后端先持久化提升意图，再通过S3服务端Copy把暂存对象移动到该Attempt的`originals/{media_id}/{attempt_id}/source.ext`；Head验证大小、类型和checksum成功后才完成`source_verified`并将Job放入FIFO队列。该步骤不新增编排检查点，媒体字节不经过Django主机。
 5. 音频与视频共用上传协议，后续选择不同 MediaConvert 模板。
 
 若浏览器无法重新获得本地文件句柄，界面必须提示管理员重新选择同一文件；指纹不匹配禁止续传。

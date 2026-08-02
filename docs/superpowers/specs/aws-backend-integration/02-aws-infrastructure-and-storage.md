@@ -49,7 +49,7 @@ candidates/{media_id}/{attempt_id}/subtitles/...
 应用角色只允许：
 
 - 对限定前缀发起、列出、完成和中止 Multipart；Head/Get/Put/Delete 必须限定到业务 Key。
-- 创建、查询和取消属于本应用的 MediaConvert Job，并仅能 `iam:PassRole` 给指定服务角色。
+- 创建、列举对账、查询和取消属于本应用的 MediaConvert Job，并仅能 `iam:PassRole` 给指定服务角色。`ListJobs` 不支持 Job ARN 级资源限制，因此仅该动作使用 `Resource: '*'`；应用必须按非敏感 `userMetadata.job_id/attempt_id`、模板、输入Key和候选目标共同匹配，不能把同账户其他Job纳入本项目。
 - 读取 CloudFront 签名配置所需的非秘密标识；私钥由应用秘密存储提供。
 
 这里的“应用角色”在 MVP 物理实现中对应上述 Runtime User Policy；权限语义保持一致，未来迁移到临时 Role 时不改变应用接口。

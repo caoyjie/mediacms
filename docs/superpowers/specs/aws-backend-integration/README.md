@@ -18,6 +18,7 @@ MediaCMS 是唯一业务系统和轻量控制面；浏览器、S3、MediaConvert
 | [02-aws-infrastructure-and-storage.md](02-aws-infrastructure-and-storage.md) | S3、IAM、MediaConvert、CloudFormation、版本化资源 |
 | [03-browser-upload-and-hls-import.md](03-browser-upload-and-hls-import.md) | 本地文件/HLS ZIP直传协议、安全约束、服务端恢复证据与上传租约 |
 | [04-media-processing-orchestration.md](04-media-processing-orchestration.md) | 来源检查点、串行队列、原子发布、重试、取消与清理 |
+| [04a-mediaconvert-core-orchestration.md](04a-mediaconvert-core-orchestration.md) | 本地视频/音频 MediaConvert 核心闭环 |
 | [05-youtube-and-subtitles.md](05-youtube-and-subtitles.md) | YouTube、cookies.txt、字幕发现/合并/上传 |
 | [06-cloudfront-playback.md](06-cloudfront-playback.md) | 签名 Cookie Bootstrap、续期与私有媒体播放授权契约 |
 | [07-deployment-and-acceptance.md](07-deployment-and-acceptance.md) | 部署、全新数据库、测试矩阵、上线与旧资源清理 |

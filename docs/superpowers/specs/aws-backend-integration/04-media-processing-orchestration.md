@@ -2,7 +2,7 @@
 
 ## 1. 范围
 
-本模块权威定义来源检查点、FIFO 串行执行、MediaConvert 协调、资源激活、失败恢复、取消和本地清理。
+本模块权威定义来源检查点、FIFO 串行执行、MediaConvert 协调、资源激活、失败恢复、取消和本地清理。本地单视频/单音频核心闭环由`04a-mediaconvert-core-orchestration.md`进一步细化。
 
 ## 2. 通用检查点
 
@@ -94,7 +94,7 @@ flowchart LR
 sha256(attempt_id + template_version + input_checksum)
 ```
 
-AWS 对该 Token 的重复提交保护时间有限，因此它只是第二层保护。权威幂等链为“数据库提交意图 + 已保存 MediaConvert Job ID + ClientRequestToken”。崩溃恢复时先检查提交意图和已保存 ID，再按非敏感 `userMetadata` 对账，不能仅因 Token 相同就盲目重提。只轮询全局租约持有的活动Job：提交或进度变化后10秒，两次无变化后30秒，五次无变化后最多60秒；持久化供应商状态、阶段和真实百分比，终态立即停止。
+AWS 对该 Token 的重复提交保护时间有限，因此它只是第二层保护。权威幂等链为“数据库提交意图 + 已保存 MediaConvert Job ID + ClientRequestToken”。崩溃恢复时先检查提交意图和已保存ID，再使用`ListJobs`按非敏感`userMetadata.job_id/attempt_id`、模板、输入Key和目标前缀共同对账；有界对账仍无法确认时进入`action_required`，绝不自动重提。只轮询全局租约持有的活动Job：提交或进度变化后10秒，两次无变化后30秒，五次无变化后最多60秒；持久化供应商状态、阶段和真实百分比，终态立即停止。
 
 每个 Job 添加标准 AWS Tags：`Project=mediacms`、`Environment=dev|prod`、`MediaId`、`JobId`、`AttemptId`、`SourceType=upload|youtube`、`TemplateVersion`。Tags 用于成本、审计和资源归属；`userMetadata` 只写 `job_id/attempt_id`。两者都禁止写标题、YouTube URL、Cookie、管理员信息、签名 URL或其他秘密。
 
