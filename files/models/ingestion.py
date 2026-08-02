@@ -43,6 +43,19 @@ class CheckpointStatus(models.TextChoices):
     FAILED_RETRYABLE = "failed_retryable", "Failed retryable"
 
 
+class ArtifactPurpose(models.TextChoices):
+    UPLOAD_SOURCE = "upload_source", "Upload source"
+    ORIGINAL = "original", "Original"
+    CANDIDATE = "candidate", "Candidate"
+
+
+class ArtifactCleanupStatus(models.TextChoices):
+    PENDING = "pending", "Pending"
+    RETAINED = "retained", "Retained"
+    DELETED = "deleted", "Deleted"
+    FAILED = "failed", "Failed"
+
+
 class MediaIngestionJobQuerySet(models.QuerySet):
     def queued(self):
         from .uploads import BrowserUploadSession
@@ -126,6 +139,10 @@ class MediaJobAttempt(models.Model):
         db_index=True,
     )
     celery_task_id = models.CharField(max_length=255, blank=True)
+    template_name = models.CharField(max_length=255, blank=True)
+    template_version = models.CharField(max_length=255, blank=True)
+    client_request_token = models.CharField(max_length=64, blank=True)
+    submission_intent_at = models.DateTimeField(blank=True, null=True)
     mediaconvert_job_id = models.CharField(max_length=255, blank=True)
     provider_status = models.CharField(max_length=64, blank=True)
     provider_phase = models.CharField(max_length=64, blank=True)
@@ -136,6 +153,9 @@ class MediaJobAttempt(models.Model):
         blank=True,
         null=True,
     )
+    next_poll_at = models.DateTimeField(blank=True, null=True)
+    provider_last_changed_at = models.DateTimeField(blank=True, null=True)
+    provider_unchanged_count = models.PositiveIntegerField(default=0)
     checkpoint_evidence = models.JSONField(default=dict, blank=True)
     diagnostic_error = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -145,6 +165,12 @@ class MediaJobAttempt(models.Model):
 
     class Meta:
         ordering = ("job", "sequence")
+        indexes = [
+            models.Index(
+                fields=("status", "next_poll_at"),
+                name="files_attempt_due_idx",
+            )
+        ]
         constraints = [
             models.UniqueConstraint(
                 fields=("job", "sequence"),
@@ -154,6 +180,74 @@ class MediaJobAttempt(models.Model):
 
     def __str__(self):
         return f"{self.job_id}:{self.sequence}:{self.status}"
+
+
+class AttemptArtifact(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    attempt = models.ForeignKey(
+        MediaJobAttempt,
+        on_delete=models.CASCADE,
+        related_name="artifacts",
+    )
+    purpose = models.CharField(max_length=32, choices=ArtifactPurpose.choices)
+    s3_key = models.CharField(max_length=1500)
+    size_bytes = models.PositiveBigIntegerField()
+    content_type = models.CharField(max_length=255)
+    checksum = models.CharField(max_length=255)
+    cleanup_status = models.CharField(
+        max_length=20,
+        choices=ArtifactCleanupStatus.choices,
+        default=ArtifactCleanupStatus.PENDING,
+        db_index=True,
+    )
+    safe_error = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("attempt", "created_at", "id")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("attempt", "s3_key"),
+                name="files_artifact_attempt_key_uniq",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    Q(s3_key__startswith="uploads/")
+                    | Q(s3_key__startswith="originals/")
+                    | Q(s3_key__startswith="candidates/")
+                ),
+                name="files_artifact_managed_root",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.attempt_id}:{self.purpose}:{self.cleanup_status}"
+
+
+class MediaJobWarning(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    attempt = models.ForeignKey(
+        MediaJobAttempt,
+        on_delete=models.CASCADE,
+        related_name="warnings",
+    )
+    code = models.CharField(max_length=64)
+    message = models.TextField()
+    acknowledged_at = models.DateTimeField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("attempt", "created_at", "id")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("attempt", "code"),
+                name="files_warning_attempt_code_uniq",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.attempt_id}:{self.code}"
 
 
 class MediaJobCheckpoint(models.Model):

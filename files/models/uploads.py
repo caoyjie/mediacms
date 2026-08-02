@@ -37,6 +37,13 @@ class BrowserUploadObjectStatus(models.TextChoices):
     ABORTED = "aborted", "Aborted"
 
 
+class PromotionStatus(models.TextChoices):
+    PENDING = "pending", "Pending"
+    COPYING = "copying", "Copying"
+    VERIFIED = "verified", "Verified"
+    FAILED = "failed", "Failed"
+
+
 class BrowserUploadSession(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     job = models.OneToOneField(
@@ -131,6 +138,13 @@ class BrowserUploadObject(models.Model):
     expected_checksum = models.CharField(max_length=255, blank=True)
     multipart_upload_id = models.CharField(max_length=1024, blank=True)
     checksum = models.CharField(max_length=255, blank=True)
+    promoted_s3_key = models.CharField(max_length=1500, blank=True)
+    promotion_status = models.CharField(
+        max_length=20,
+        choices=PromotionStatus.choices,
+        default=PromotionStatus.PENDING,
+        db_index=True,
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
