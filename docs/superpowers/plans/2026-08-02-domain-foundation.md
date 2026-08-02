@@ -373,7 +373,7 @@ git commit -m "feat: enforce media state transitions"
 - Consumes: `MediaIngestionJob`, `MediaJobAttempt`, `ProcessingLease`.
 - Produces: `enqueue_job(job_id: UUID)`, `acquire_head_job(owner_token: str, lease_seconds: int, now=None) -> LeaseAcquisition | None`, `heartbeat_lease(owner_token: str, lease_seconds: int, now=None)`, and `release_lease(owner_token: str)`.
 
-- [ ] **Step 1: Write failing FIFO and lease exclusion tests**
+- [x] **Step 1: Write failing FIFO and lease exclusion tests**
 
 ```python
 import pytest
@@ -393,17 +393,17 @@ def test_live_lease_blocks_second_owner(two_queued_jobs):
     assert acquire_head_job("worker-b", lease_seconds=60) is None
 ```
 
-- [ ] **Step 2: Run tests and verify the queue service is missing**
+- [x] **Step 2: Run tests and verify the queue service is missing**
 
 Run: `pytest tests/aws_domain/test_processing_queue.py -q`
 
 Expected: FAIL importing `processing_queue`.
 
-- [ ] **Step 3: Implement locked singleton acquisition**
+- [x] **Step 3: Implement locked singleton acquisition**
 
 Inside `transaction.atomic()`, ensure the `default` ProcessingLease row exists, lock it with `select_for_update()`, reject a non-expired different owner, then lock the first queued Job ordered by `queued_at,id`. Create the next Attempt sequence under the same transaction when the Job has no resumable queued Attempt, set Job/Attempt running, bind the lease, and return an immutable `LeaseAcquisition(job_id, attempt_id, expires_at)` dataclass. Heartbeat and release require exact owner token; release clears ownership but preserves the singleton row.
 
-- [ ] **Step 4: Add expiry and crash-recovery tests**
+- [x] **Step 4: Add expiry and crash-recovery tests**
 
 Test expired takeover, wrong-owner heartbeat/release rejection, no queued job, stable tie-breaking by UUID, Attempt sequence increment on Resume, and two database connections racing for acquisition with exactly one winner. Skip the true concurrency case only when the test database vendor is not PostgreSQL.
 
@@ -411,7 +411,7 @@ Run: `pytest tests/aws_domain/test_processing_queue.py -q`
 
 Expected: PASS; PostgreSQL run proves exactly one acquisition.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add files/services/processing_queue.py tests/aws_domain/test_processing_queue.py
