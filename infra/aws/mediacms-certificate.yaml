@@ -1,0 +1,29 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Optional MediaCMS ACM certificate for a Cloudflare-managed media domain
+
+Parameters:
+  Environment:
+    Type: String
+    AllowedValues: [dev, prod]
+  MediaDomainName:
+    Type: String
+    AllowedPattern: '^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$'
+
+Resources:
+  MediaCertificate:
+    Type: AWS::CertificateManager::Certificate
+    Properties:
+      CertificateTransparencyLoggingPreference: ENABLED
+      DomainName: !Ref MediaDomainName
+      KeyAlgorithm: RSA_2048
+      ValidationMethod: DNS
+      Tags:
+        - Key: Project
+          Value: mediacms
+        - Key: Environment
+          Value: !Ref Environment
+
+Outputs:
+  CertificateArn:
+    Description: ARN of the DNS-validated certificate for the MediaCMS CloudFront distribution.
+    Value: !Ref MediaCertificate
