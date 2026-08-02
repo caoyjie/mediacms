@@ -8,8 +8,8 @@
 
 - 区域固定为 `us-east-1`。
 - S3 Bucket 默认物理名：`mediacms-${AWS::AccountId}-us-east-1`；参数可覆盖，但部署前必须验证全球唯一。
-- 新建私有 S3、MediaConvert Service Role、应用 IAM Runtime User/Policy、版本化 Job Template、CloudWatch 告警、CloudFront Distribution、OAC、Key Group 和签名公钥。
-- S3 启用 Block Public Access、默认加密、Multipart 生命周期清理和最小 CORS。
+- 新建私有 S3、MediaConvert Service Role、应用 IAM Runtime User/Policy、版本化 Job Template、CloudFront Distribution、OAC、Key Group 和签名公钥。不创建 SNS、CloudWatch Alarm/Dashboard/自定义指标、EventBridge、SQS或监控Lambda。
+- S3 启用 Block Public Access、默认加密、Multipart 生命周期清理和最小 CORS。MVP不启用S3 Versioning；Attempt唯一Key与`MediaAssetVersion`承担版本隔离，避免大媒体非当前版本重复计费。
 - CloudFront 仅通过 OAC 读 S3；S3 不提供公共 URL。
 - CloudFormation 输出 Bucket、Distribution ID/Domain、Key Pair ID、MediaConvert Role ARN 和应用所需配置。
 
@@ -71,10 +71,11 @@ stateDiagram-v2
     PROGRESSING --> ERROR
 ```
 
-- MVP 每 10–15 秒调用 `GetJob`；不使用 EventBridge。
+- MVP只对全局租约持有的活动Job调用`GetJob`：提交或进度变化后每10秒，两次无变化后30秒，五次无变化后最多60秒；终态立即停止。不使用EventBridge。
 - `INPUT_INFORMATION`、`STATUS_UPDATE`、`NEW_WARNING`、`QUEUE_HOP` 是 EventBridge 事件类型，不能写入 `provider_status`。
 - `COMPLETE` 只表示输出已写到 S3；之后仍必须验证清单、对象和校验数据，再原子激活。
 - `ERROR/CANCELED` 映射到 Attempt 结果，不直接改写 Media 可见性。
+- `SUBMITTED`超过30分钟、`PROGRESSING`连续30分钟无状态/阶段/真实百分比变化时创建去重站内警告；总处理超过6小时按超时失败并请求取消。AWS节流和临时网络错误使用有界指数退避，不产生假失败。
 
 官方语义以 AWS 文档为准：
 

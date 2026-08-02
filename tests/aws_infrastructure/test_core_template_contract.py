@@ -31,7 +31,6 @@ def test_core_template_has_required_parameters_and_no_secret_outputs():
         "EnableCustomDomain",
         "MediaDomainName",
         "AcmCertificateArn",
-        "AlarmNotificationEmail",
         "AutomatedAbrEnabled",
         "AccelerationMode",
     }
@@ -80,7 +79,7 @@ def test_core_template_declares_only_non_secret_output_contract():
     }
 
 
-def test_bucket_is_private_encrypted_versioned_and_aborts_stale_multipart():
+def test_bucket_is_private_encrypted_unversioned_and_aborts_stale_multipart():
     bucket = load_template(CORE)["Resources"]["MediaBucket"]
     props = bucket["Properties"]
     assert bucket["DeletionPolicy"] == "Retain"
@@ -94,7 +93,7 @@ def test_bucket_is_private_encrypted_versioned_and_aborts_stale_multipart():
     assert props["OwnershipControls"]["Rules"] == [
         {"ObjectOwnership": "BucketOwnerEnforced"}
     ]
-    assert props["VersioningConfiguration"]["Status"] == "Enabled"
+    assert "VersioningConfiguration" not in props
     assert props["BucketEncryption"]["ServerSideEncryptionConfiguration"][0][
         "ServerSideEncryptionByDefault"
     ]["SSEAlgorithm"] == "AES256"

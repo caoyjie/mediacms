@@ -46,7 +46,7 @@
 
 任何门槛未通过必须中止部署，不以增加Swap掩盖持续内存不足。
 
-两台报告的可选网络测试均被跳过。进入AWS集成前，Arch必须验证浏览器到S3、CloudFront、AWS API和GHCR push；生产必须验证GHCR pull、S3 HEAD/PUT、MediaConvert/CloudWatch API、Cloudflare Tunnel以及一个短YouTube metadata/download。网络测试失败属于部署阻塞，不以短视频规避不可达问题。
+两台报告的可选网络测试均被跳过。进入AWS集成前，Arch必须验证浏览器到S3、CloudFront、AWS API和GHCR push；生产必须验证GHCR pull、S3 HEAD/PUT、MediaConvert API、Cloudflare Tunnel以及一个短YouTube metadata/download。网络测试失败属于部署阻塞，不以短视频规避不可达问题。
 
 ### 2.3 已验证的开发工具基线
 
@@ -59,7 +59,7 @@
 | `cfn-lint 1.53.3` | 由`uv tool`安装且可执行 | 所有CloudFormation模板在部署前必须通过lint |
 | `gh 2.96.0` | GitHub API、SSH远程和`caoyjie/mediacms`访问成功 | 用于仓库、Actions和GHCR发布操作 |
 | GitHub认证 | Classic token含`repo`与`write:packages` | Arch可构建和推送GHCR；不得把token写入环境报告、日志或仓库 |
-| AWS CLI/STS | 身份查询成功 | 只证明当前凭证有效；每项S3、MediaConvert、CloudFormation和CloudWatch权限仍按最小权限集成测试 |
+| AWS CLI/STS | 身份查询成功 | 只证明当前凭证有效；每项S3、MediaConvert和CloudFormation权限仍按最小权限集成测试，并确认Runtime无CloudWatch写权限 |
 | Docker Engine 29.6.2 | Server可访问，Compose 5.3.1可用 | 本地容器开发阻塞已解除 |
 
 Docker socket的权威配置为`root:docker`、`0660`，当前用户属于`docker`组且`docker info`可访问14 CPU/30.84 GiB测试机Engine。不得以`chmod 666`、rootless旁路或额外不受控daemon解决权限问题。后续若再次失败，先检查`docker.socket`的`SocketGroup=docker`、活动组和systemd状态，再恢复标准socket所有权。
@@ -102,7 +102,7 @@ flowchart TD
 - candidate完整验证与active原子切换。
 - MediaConvert幂等、失败、取消与清理。
 - dev/prod使用不同Stack、Tags、Bucket或强隔离前缀、CloudFront Distribution和环境化模板；dev Cookie不能授权prod，dev cleanup不能触及prod。
-- 删除dev Stack时验证生产Bucket、Distribution和模板不受影响；AWS Budget和告警在测试前启用。
+- 删除dev Stack时验证生产Bucket、Distribution和模板不受影响。MVP不创建AWS Budget或告警资源，费用通过测试资产时长、严格单任务和Change Set资源审查控制。
 
 普通提交只跑一条短视频闭环；完整MediaConvert矩阵每天或发布前运行。测试资产建立版本化manifest，记录名称、来源、许可、SHA-256、时长、分辨率、字幕和预期结果。自有20–60秒360p、1–3分钟720p、30–60秒音频、小型HLS ZIP和SRT/VTT是稳定fixture。YouTube同时维护主/备两个公开短视频；外部视频删除、限流或字幕变化归类为fixture failure，不直接判代码失败。还需覆盖仅英文、无字幕和必要Cookie场景。
 

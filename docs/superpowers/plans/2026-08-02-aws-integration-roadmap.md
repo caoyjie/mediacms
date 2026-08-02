@@ -13,7 +13,7 @@
 | 顺序 | 计划 | 独立交付物 | 外部阻塞 |
 | ---: | --- | --- | --- |
 | 1 | ✅ Domain foundation（完成） | Media兼容字段、Job/Attempt/Checkpoint、AssetVersion、FIFO Lease、唯一管理员 | 无 |
-| 2 | AWS infrastructure | 独立S3/IAM/CloudFront/MediaConvert模板、CloudWatch、dev Stack | ACM自定义域名部分等待实际域名 |
+| 2 | AWS infrastructure | 最小化S3/IAM/CloudFront/MediaConvert模板、dev Stack | ACM自定义域名部分等待实际域名 |
 | 3 | Browser ingestion | Multipart API、恢复对账、HLS ZIP对象清单和上传租约 | 无 |
 | 4 | Processing orchestration | 来源检查点执行器、MediaConvert协调、原子激活、取消和cleanup | 依赖AWS dev Stack |
 | 5 | YouTube and subtitles | yt-dlp、加密Cookie、三轨WebVTT、无字幕和Resume | 依赖S3与编排 |
@@ -41,8 +41,8 @@
 
 参考文件为`/home/caoyujie/projects/cyj/media-platform/infra/aws/media-platform.yaml`。只迁移经过MediaCMS需求复核的结构，不复制物理名称或既有资源引用：
 
-- 复用设计模式：S3 Block Public Access/加密/版本控制/Multipart生命周期、CloudFront OAC、Public Key/Key Group双钥轮换、credentialed CORS response policy、ACM可外部DNS验证、MediaConvert Service Role、CloudFront SourceArn约束的Bucket Policy以及非秘密Outputs。
-- 必须改造：Bucket默认名改为`mediacms-${AWS::AccountId}-us-east-1`；Tags改为`Project=mediacms`并包含Environment；来源前缀、CORS应用域名、生命周期、CloudWatch和MediaConvert Job Templates按本项目规范参数化。
+- 复用设计模式：S3 Block Public Access/加密/Multipart生命周期、CloudFront OAC、Public Key/Key Group双钥轮换、credentialed CORS response policy、ACM可外部DNS验证、MediaConvert Service Role、CloudFront SourceArn约束的Bucket Policy以及非秘密Outputs。
+- 必须改造：Bucket默认名改为`mediacms-${AWS::AccountId}-us-east-1`；Tags改为`Project=mediacms`并包含Environment；来源前缀、CORS应用域名、生命周期和MediaConvert Job Templates按本项目规范参数化；不复制S3 Versioning或AWS告警资源。
 - 禁止照搬：Vercel custom origin/default behavior、`media-platform-*`名称、Route 53自动记录（DNS由Cloudflare管理）、现有Bucket/Distribution/Role/Public Key以及任何旧AWS资源。
 - 采用参考模板的 IAM User、AccessKey 和 Secrets Manager 运行时凭证组合，但改为 MediaCMS 独立命名、dev/prod隔离、最小前缀权限、至少每90天审查和CloudFormation A/B双槽位轮换；CloudFormation Outputs不得包含SecretAccessKey。
 

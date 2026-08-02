@@ -94,13 +94,15 @@ flowchart LR
 sha256(attempt_id + template_version + input_checksum)
 ```
 
-AWS 对该 Token 的重复提交保护时间有限，因此它只是第二层保护。权威幂等链为“数据库提交意图 + 已保存 MediaConvert Job ID + ClientRequestToken”。崩溃恢复时先检查提交意图和已保存 ID，再按非敏感 `userMetadata` 对账，不能仅因 Token 相同就盲目重提。每 10–15 秒轮询，持久化供应商状态、阶段和真实百分比。
+AWS 对该 Token 的重复提交保护时间有限，因此它只是第二层保护。权威幂等链为“数据库提交意图 + 已保存 MediaConvert Job ID + ClientRequestToken”。崩溃恢复时先检查提交意图和已保存 ID，再按非敏感 `userMetadata` 对账，不能仅因 Token 相同就盲目重提。只轮询全局租约持有的活动Job：提交或进度变化后10秒，两次无变化后30秒，五次无变化后最多60秒；持久化供应商状态、阶段和真实百分比，终态立即停止。
 
 每个 Job 添加标准 AWS Tags：`Project=mediacms`、`Environment=dev|prod`、`MediaId`、`JobId`、`AttemptId`、`SourceType=upload|youtube`、`TemplateVersion`。Tags 用于成本、审计和资源归属；`userMetadata` 只写 `job_id/attempt_id`。两者都禁止写标题、YouTube URL、Cookie、管理员信息、签名 URL或其他秘密。
 
 接口语义参考 [CreateJob 的 ClientRequestToken](https://docs.aws.amazon.com/cli/latest/reference/mediaconvert/create-job.html) 和 [MediaConvert 资源标签](https://docs.aws.amazon.com/mediaconvert/latest/ug/tagging-mediaconvert-resources.html)。
 
 进度显示优先级：MediaConvert 百分比可用时使用；仅有阶段时显示不确定阶段，不构造伪百分比。`COMPLETE` 后进入输出验证；`ERROR` 归类并记录安全错误；取消请求调用 MediaConvert CancelJob 后继续轮询到终态。
+
+异常检测由Django reconciler负责，不创建AWS告警服务。`SUBMITTED`超过30分钟、`PROGRESSING`连续30分钟无状态/阶段/百分比变化时按Attempt和告警类型创建一次站内警告；总处理超过6小时按超时失败并请求取消。AWS节流、超时和临时网络错误使用带抖动的有界指数退避，保留最后已知状态。`GetJob`返回的安全`Messages.Warning`可入库；自动黑屏和padding检测不属于MVP，因为它们不是可靠的`GetJob`状态字段。
 
 ## 6. 原子激活与发布
 
@@ -131,7 +133,7 @@ Resume 创建新 Attempt，复用仍有有效证据的检查点。重新提交 M
 - cookies 临时文件：每次 yt-dlp 调用结束即删除，权限始终 `0600`。
 - 字幕中间文件、ffprobe 输出、HLS 单帧所需最少分片和工作目录：发布后统一清理。
 - 清理幂等，记录每个路径/Key 的结果；只能删除受管临时根下属于当前 Attempt 的规范化路径。
-- 周期性 janitor 回收进程崩溃残留；失败写入独立 cleanup_status 和告警，不影响已 ready 媒体。
+- 周期性 janitor 回收进程崩溃残留；失败写入独立 cleanup_status 和去重站内通知，不影响已 ready 媒体。
 - HLS ZIP 从不进入后端，不存在后端 ZIP 清理步骤。
 
 ## 9. 前端任务投影
