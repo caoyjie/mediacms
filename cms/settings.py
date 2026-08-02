@@ -207,6 +207,14 @@ AWS_MANIFEST_MAX_BYTES = int(os.environ.get("AWS_MANIFEST_MAX_BYTES", str(1024 *
 AWS_CANDIDATE_LIST_MAX_OBJECTS = int(
     os.environ.get("AWS_CANDIDATE_LIST_MAX_OBJECTS", "10000")
 )
+AWS_MEDIACONVERT_ROLE_ARN = os.environ.get("AWS_MEDIACONVERT_ROLE_ARN", "")
+AWS_MEDIACONVERT_VIDEO_TEMPLATE = os.environ.get("AWS_MEDIACONVERT_VIDEO_TEMPLATE", "")
+AWS_MEDIACONVERT_AUDIO_TEMPLATE = os.environ.get("AWS_MEDIACONVERT_AUDIO_TEMPLATE", "")
+AWS_MEDIACONVERT_TEMPLATE_VERSION = os.environ.get(
+    "AWS_MEDIACONVERT_TEMPLATE_VERSION",
+    "h264-hls-qvbr-v1",
+)
+AWS_ENVIRONMENT = os.environ.get("AWS_ENVIRONMENT", "dev")
 
 # these used to be os.path.join(MEDIA_ROOT, "folder/") but update to
 # Django 3.1.9 requires not absolute paths to be utilized...
