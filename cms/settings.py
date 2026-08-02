@@ -33,6 +33,7 @@ DEFAULT_THEME = "light"
 LOAD_FROM_CDN = False
 LOGIN_ALLOWED = True  # whether the login button appears
 REGISTER_ALLOWED = True  # whether the register button appears
+MEDIACMS_SINGLE_ADMIN_MODE = False
 UPLOAD_MEDIA_ALLOWED = True  # whether the upload media button appears
 CAN_LIKE_MEDIA = True  # whether the like media appears
 CAN_DISLIKE_MEDIA = True  # whether the dislike media appears
@@ -327,6 +328,7 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "users.middleware.SiteAdministratorGuardMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "debug_toolbar.middleware.DebugToolbarMiddleware",

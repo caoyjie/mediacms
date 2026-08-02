@@ -22,6 +22,8 @@ class MyAccountAdapter(DefaultAccountAdapter):
         return email
 
     def is_open_for_signup(self, request):
+        if getattr(settings, "MEDIACMS_SINGLE_ADMIN_MODE", False):
+            return False
         return settings.USERS_CAN_SELF_REGISTER
 
     def send_mail(self, template_prefix, email, context):

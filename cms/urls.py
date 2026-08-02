@@ -2,11 +2,20 @@ import debug_toolbar
 from django.conf import settings
 from django.conf.urls import include
 from django.contrib import admin
+from django.http import Http404
 from django.urls import path, re_path
 from django.views.generic.base import TemplateView
 from drf_yasg import openapi
 from drf_yasg.views import get_schema_view
 from rest_framework.permissions import AllowAny
+
+
+def account_signup(request, *args, **kwargs):
+    if getattr(settings, "MEDIACMS_SINGLE_ADMIN_MODE", False):
+        raise Http404("Account registration is disabled")
+    from allauth.account.views import SignupView
+
+    return SignupView.as_view()(request, *args, **kwargs)
 
 schema_view = get_schema_view(
     openapi.Info(title="MediaCMS API", default_version='v1', contact=openapi.Contact(url="https://mediacms.io"), x_logo={"url": "../../static/images/logo_dark.svg"}),
@@ -25,6 +34,7 @@ urlpatterns = [
     ),
     re_path(r"^", include("files.urls")),
     re_path(r"^", include("users.urls")),
+    path("accounts/signup/", account_signup, name="account_signup"),
     re_path(r"^accounts/", include("allauth.urls")),
     re_path(r"^lti/", include("lti.urls")),
     re_path(r"^api-auth/", include("rest_framework.urls")),

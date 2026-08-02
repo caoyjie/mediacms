@@ -1,0 +1,6 @@
+from .settings import *  # noqa: F403,F401
+
+
+MEDIACMS_SINGLE_ADMIN_MODE = True
+USERS_CAN_SELF_REGISTER = False
+REGISTER_ALLOWED = False

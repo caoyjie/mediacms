@@ -512,7 +512,7 @@ git commit -m "feat: enforce singleton site administrator"
 - Produces: `IsSiteAdministrator` DRF permission and `SiteAdministratorGuardMiddleware`.
 - Produces: maintenance response code `site_administrator_unavailable` for authenticated protected requests when the singleton is absent/invalid.
 
-- [ ] **Step 1: Write failing access-boundary tests**
+- [x] **Step 1: Write failing access-boundary tests**
 
 ```python
 import pytest
@@ -534,29 +534,29 @@ def test_non_bound_active_user_cannot_use_protected_api(site_administrator, othe
     assert response.status_code == 403
 ```
 
-- [ ] **Step 2: Run tests and verify current multi-user behavior fails them**
+- [x] **Step 2: Run tests and verify current multi-user behavior fails them**
 
 Run: `pytest tests/users/test_single_admin_access.py -q`
 
 Expected: FAIL because signup/current authenticated APIs still accept ordinary users.
 
-- [ ] **Step 3: Implement settings-driven single-admin boundary**
+- [x] **Step 3: Implement settings-driven single-admin boundary**
 
 Set `MEDIACMS_SINGLE_ADMIN_MODE=False` as the compatibility default in `cms/settings.py`. Create `cms/aws_settings.py` importing base settings and overriding `MEDIACMS_SINGLE_ADMIN_MODE=True`, `USERS_CAN_SELF_REGISTER=False`, and `REGISTER_ALLOWED=False`; AWS Compose and all new AWS tests use `DJANGO_SETTINGS_MODULE=cms.aws_settings`. Make `MyAccountAdapter.is_open_for_signup()` return false in single-admin mode. Keep allauth login/password management routes needed by the administrator, but map `/accounts/signup/` to an English 404/disabled response before including allauth URLs. Remove signup copy from the login template.
 
 `IsSiteAdministrator.has_permission()` delegates to the singleton model. The middleware checks authenticated requests in single-admin mode, exempts static/media, login/logout, health, and the administrator repair command (which is not HTTP), returns JSON `503 {"code":"site_administrator_unavailable"}` when the binding is invalid, and returns `403 {"code":"single_administrator_required"}` for a different authenticated user on API paths. HTML paths log the other user out and redirect to login without a redirect loop.
 
-- [ ] **Step 4: Wire the boundary without removing installed apps**
+- [x] **Step 4: Wire the boundary without removing installed apps**
 
 Add middleware after Django `AuthenticationMiddleware`. Apply `IsSiteAdministrator` first to the existing authenticated management/API base points used by the AWS implementation; do not change public media read endpoints in this task. Assert settings still contain RBAC, LTI, SAML, identity providers and actions.
 
-- [ ] **Step 5: Run focused and existing authentication regressions**
+- [x] **Step 5: Run focused and existing authentication regressions**
 
 Run: `pytest tests/users/test_single_admin_access.py tests/users/test_session_version.py tests/api/test_user_login.py tests/api/test_user_whoami.py -q`
 
 Expected: PASS. Existing base-settings regression tests retain compatibility mode; `test_single_admin_access.py` explicitly uses AWS settings/overrides and its fixture creates `SiteAdministrator(user=login_user)`.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add users/permissions.py users/middleware.py users/adapter.py cms/settings.py cms/aws_settings.py cms/urls.py templates/account/login.html tests/users/test_single_admin_access.py
