@@ -221,6 +221,9 @@ AWS_MEDIACONVERT_TOKEN_WINDOW_SECONDS = int(
 AWS_MEDIACONVERT_RECONCILIATION_LIMIT = int(
     os.environ.get("AWS_MEDIACONVERT_RECONCILIATION_LIMIT", "3")
 )
+AWS_PROCESSING_LEASE_SECONDS = int(
+    os.environ.get("AWS_PROCESSING_LEASE_SECONDS", "120")
+)
 
 # these used to be os.path.join(MEDIA_ROOT, "folder/") but update to
 # Django 3.1.9 requires not absolute paths to be utilized...
@@ -486,11 +489,16 @@ CELERY_ACCEPT_CONTENT = ["application/json"]
 CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
 CELERY_TIMEZONE = TIME_ZONE
+CELERY_IMPORTS = ("files.processing_tasks",)
 CELERY_SOFT_TIME_LIMIT = 2 * 60 * 60
 CELERY_WORKER_PREFETCH_MULTIPLIER = 1
 CELERYD_PREFETCH_MULTIPLIER = 1
 
 CELERY_BEAT_SCHEDULE = {
+    "reconcile_aws_processing": {
+        "task": "reconcile_aws_processing",
+        "schedule": crontab(minute="*"),
+    },
     # clear expired sessions, every sunday 1.01am. By default Django has 2week
     # expire date
     "clear_sessions": {

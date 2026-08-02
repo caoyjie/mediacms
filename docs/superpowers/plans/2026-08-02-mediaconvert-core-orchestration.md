@@ -313,12 +313,12 @@ def run_processing_tick(owner_token: str, now=None) -> "TickResult": ...
 - Produces `run_processing_tick(owner_token,now=None) -> TickResult`.
 - Celery tasks `aws_processing_tick(job_id=None)` and `reconcile_aws_processing()`.
 
-- [ ] **Step 1: Write state-machine tests.** One tick performs exactly one of probe/intent/submit/poll/verify/publish/cleanup; it checks lease ownership and cancel flag first.
-- [ ] **Step 2: Write scheduling tests.** Tick uses `apply_async(countdown=...)`; no sleep; duplicate wakeups are harmless; only the lease-bound Job is polled.
-- [ ] **Step 3: Write Redis-loss tests.** With no scheduled task, reconciler discovers queued/due running PostgreSQL work and emits one safe wakeup; it never creates duplicate Attempt or submission.
-- [ ] **Step 4: Implement runner and thin Celery wrappers.** Add Beat every minute only for reconciliation; adaptive ticks self-schedule.
-- [ ] **Step 5: Verify eager-mode, PostgreSQL race and all AWS domain suites.** Run the focused task tests plus `tests/aws_domain`, `tests/aws_ingestion` and `tests/aws_orchestration` against PostgreSQL 17.
-- [ ] **Step 6: Commit:** `git commit -m "feat: orchestrate aws processing ticks"`.
+- [x] **Step 1: Write state-machine tests.** One tick performs exactly one of probe/intent/submit/poll/verify/publish/cleanup; it checks lease ownership and cancel flag first.
+- [x] **Step 2: Write scheduling tests.** Tick uses `apply_async(countdown=...)`; no sleep; duplicate wakeups are harmless; only the lease-bound Job is polled.
+- [x] **Step 3: Write Redis-loss tests.** With no scheduled task, reconciler discovers queued/due running PostgreSQL work and emits one safe wakeup; it never creates duplicate Attempt or submission.
+- [x] **Step 4: Implement runner and thin Celery wrappers.** Add Beat every minute only for reconciliation; adaptive ticks self-schedule.
+- [x] **Step 5: Verify eager-mode, PostgreSQL race and all AWS domain suites.** Run the focused task tests plus `tests/aws_domain`, `tests/aws_ingestion` and `tests/aws_orchestration` against PostgreSQL 17.
+- [x] **Step 6: Commit:** `git commit -m "feat: orchestrate aws processing ticks"`.
 
 ### Task 13: Disposable Real Video and Audio Acceptance
 
