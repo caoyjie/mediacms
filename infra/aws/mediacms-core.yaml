@@ -110,6 +110,7 @@ Conditions:
   CreateRuntimeAccessKeyA: !Equals [!Ref RuntimeAccessKeyAEnabled, 'true']
   CreateRuntimeAccessKeyB: !Equals [!Ref RuntimeAccessKeyBEnabled, 'true']
   UseRuntimeAccessKeyA: !Equals [!Ref RuntimeActiveAccessKeySlot, A]
+  HasAlarmNotificationEmail: !Not [!Equals [!Ref AlarmNotificationEmail, '']]
 
 Resources:
   MediaBucket:
@@ -704,6 +705,232 @@ Resources:
       Tags:
         Project: mediacms
         Environment: !Ref Environment
+
+  MediaInfrastructureAlerts:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: MediaCMS infrastructure alerts
+      TopicName: !Sub '${ResourceNamePrefix}-infrastructure-alerts'
+      Tags:
+        - Key: Project
+          Value: mediacms
+        - Key: Environment
+          Value: !Ref Environment
+
+  MediaInfrastructureEmailSubscription:
+    Type: AWS::SNS::Subscription
+    Condition: HasAlarmNotificationEmail
+    Properties:
+      Endpoint: !Ref AlarmNotificationEmail
+      Protocol: email
+      TopicArn: !Ref MediaInfrastructureAlerts
+
+  MediaConvertJobsErroredAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${ResourceNamePrefix}-mediaconvert-jobs-errored'
+      AlarmDescription: MediaConvert reports one or more errored jobs after job completion.
+      Namespace: AWS/MediaConvert
+      MetricName: JobsErroredCount
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref MediaInfrastructureAlerts]
+      Tags:
+        - Key: Project
+          Value: mediacms
+        - Key: Environment
+          Value: !Ref Environment
+
+  MediaConvertJobsCanceledAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${ResourceNamePrefix}-mediaconvert-jobs-canceled'
+      AlarmDescription: MediaConvert reports one or more canceled jobs after job completion.
+      Namespace: AWS/MediaConvert
+      MetricName: JobsCanceled
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref MediaInfrastructureAlerts]
+      Tags:
+        - Key: Project
+          Value: mediacms
+        - Key: Environment
+          Value: !Ref Environment
+
+  QueueWaitTimeoutAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${ResourceNamePrefix}-queue-wait-timeouts'
+      AlarmDescription: The MediaCMS reconciler reports a queue wait timeout.
+      Namespace: MediaCMS/Processing
+      MetricName: QueueWaitTimeoutCount
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref MediaInfrastructureAlerts]
+      Tags:
+        - Key: Project
+          Value: mediacms
+        - Key: Environment
+          Value: !Ref Environment
+
+  ProcessingTimeoutAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${ResourceNamePrefix}-processing-timeouts'
+      AlarmDescription: The MediaCMS reconciler reports a processing timeout.
+      Namespace: MediaCMS/Processing
+      MetricName: ProcessingTimeoutCount
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 0
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref MediaInfrastructureAlerts]
+      Tags:
+        - Key: Project
+          Value: mediacms
+        - Key: Environment
+          Value: !Ref Environment
+
+  BlackVideoAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${ResourceNamePrefix}-black-video-warning'
+      AlarmDescription: MediaConvert detected more than one second of source black video; warning only.
+      Namespace: AWS/MediaConvert
+      MetricName: BlackVideoDetected
+      Statistic: Maximum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1000
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref MediaInfrastructureAlerts]
+      Tags:
+        - Key: Project
+          Value: mediacms
+        - Key: Environment
+          Value: !Ref Environment
+
+  VideoPaddingAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${ResourceNamePrefix}-video-padding-warning'
+      AlarmDescription: MediaConvert inserted more than one second of video padding; warning only.
+      Namespace: AWS/MediaConvert
+      MetricName: VideoPaddingInserted
+      Statistic: Maximum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1000
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref MediaInfrastructureAlerts]
+      Tags:
+        - Key: Project
+          Value: mediacms
+        - Key: Environment
+          Value: !Ref Environment
+
+  MediaInfrastructureDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: !Sub 'mediacms-${Environment}'
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "metric",
+              "x": 0,
+              "y": 0,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "title": "MediaConvert jobs and elapsed time (${Environment})",
+                "region": "us-east-1",
+                "period": 300,
+                "stat": "Sum",
+                "metrics": [
+                  ["AWS/MediaConvert", "JobsCompletedCount"],
+                  [".", "JobsErroredCount"],
+                  [".", "JobsCanceled"],
+                  [".", "StandbyTime", {"stat": "Average"}],
+                  [".", "TranscodingTime", {"stat": "Average"}]
+                ]
+              }
+            },
+            {
+              "type": "metric",
+              "x": 12,
+              "y": 0,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "title": "Output duration",
+                "region": "us-east-1",
+                "period": 300,
+                "stat": "Sum",
+                "metrics": [
+                  ["AWS/MediaConvert", "SDOutputDuration"],
+                  [".", "HDOutputDuration"],
+                  [".", "UHDOutputDuration"],
+                  [".", "AudioOutputDuration"]
+                ]
+              }
+            },
+            {
+              "type": "metric",
+              "x": 0,
+              "y": 6,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "title": "QVBR quality",
+                "region": "us-east-1",
+                "period": 300,
+                "stat": "Average",
+                "metrics": [
+                  ["AWS/MediaConvert", "QVBRAvgQualityHighBitrate"],
+                  [".", "QVBRAvgQualityLowBitrate"],
+                  [".", "QVBRMinQualityHighBitrate"],
+                  [".", "QVBRMinQualityLowBitrate"]
+                ]
+              }
+            },
+            {
+              "type": "metric",
+              "x": 12,
+              "y": 6,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "title": "Quality warnings and application timeouts",
+                "region": "us-east-1",
+                "period": 300,
+                "stat": "Maximum",
+                "metrics": [
+                  ["AWS/MediaConvert", "BlackVideoDetected"],
+                  [".", "VideoPaddingInserted"],
+                  ["MediaCMS/Processing", "QueueWaitTimeoutCount", {"stat": "Sum"}],
+                  [".", "ProcessingTimeoutCount", {"stat": "Sum"}]
+                ]
+              }
+            }
+          ]
+        }
 
 Outputs:
   MediaBucketName:
