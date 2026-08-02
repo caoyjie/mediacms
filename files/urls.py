@@ -58,6 +58,37 @@ urlpatterns = [
         "api/v1/aws/uploads/<uuid:session_id>/lease/acquire/",
         views.UploadLeaseAcquireView.as_view(),
     ),
+    path(
+        "api/v1/aws/uploads/<uuid:session_id>/lease/heartbeat/",
+        views.UploadLeaseHeartbeatView.as_view(),
+    ),
+    path(
+        "api/v1/aws/uploads/<uuid:session_id>/parts/urls/",
+        views.UploadPartUrlsView.as_view(),
+    ),
+    path(
+        "api/v1/aws/uploads/<uuid:session_id>/objects/<uuid:object_id>/parts/urls/",
+        views.UploadPartUrlsView.as_view(),
+    ),
+    path(
+        "api/v1/aws/uploads/<uuid:session_id>/reconcile/",
+        views.UploadReconcileView.as_view(),
+    ),
+    path(
+        "api/v1/aws/uploads/<uuid:session_id>/complete/",
+        views.UploadCompleteView.as_view(),
+    ),
+    path(
+        "api/v1/aws/uploads/<uuid:session_id>/objects/register/",
+        views.UploadObjectRegisterView.as_view(),
+    ),
+    path(
+        "api/v1/aws/uploads/<uuid:session_id>/objects/<uuid:object_id>/url/",
+        views.UploadObjectUrlView.as_view(),
+    ),
+    path("api/v1/aws/uploads/<uuid:session_id>/pause/", views.UploadPauseView.as_view()),
+    path("api/v1/aws/uploads/<uuid:session_id>/resume/", views.UploadResumeView.as_view()),
+    path("api/v1/aws/uploads/<uuid:session_id>/cancel/", views.UploadCancelView.as_view()),
     re_path(r"^api/v1/media/user/bulk_actions$", views.MediaBulkUserActions.as_view()),
     re_path(r"^api/v1/media/user/bulk_actions/$", views.MediaBulkUserActions.as_view()),
     re_path(r"^api/v1/media$", views.MediaList.as_view()),

@@ -7,9 +7,11 @@ from files.services.upload_lease import acquire_upload_lease
 from files.services.upload_sessions import (
     CreateHlsSession,
     InvalidUploadCommand,
+    PartUploadRequest,
     complete_hls_upload,
     create_hls_session,
     issue_hls_object_url,
+    issue_part_urls,
     register_hls_inventory,
 )
 from tests.users.factories import UserFactory
@@ -22,6 +24,7 @@ class HlsGateway:
     def __init__(self):
         self.create_calls = []
         self.put_calls = []
+        self.part_calls = []
         self.head_evidence = {}
 
     def create_multipart(self, key, content_type):
@@ -31,6 +34,10 @@ class HlsGateway:
     def presign_put(self, key, content_type, content_length, checksum):
         self.put_calls.append((key, content_type, content_length, checksum))
         return PresignedRequest("https://signed.example.invalid/put", {}, 900)
+
+    def presign_part(self, key, upload_id, part_number, checksum):
+        self.part_calls.append((key, upload_id, part_number, checksum))
+        return PresignedRequest("https://signed.example.invalid/part", {}, 900)
 
     def head_object(self, key):
         return self.head_evidence[key]
@@ -77,6 +84,18 @@ def test_hls_inventory_registration_generates_keys_and_size_strategies(administr
     assert large_object.strategy == "multipart"
     assert large_object.s3_key == f"{session.upload_prefix}video/large.m4s"
     assert large_object.multipart_upload_id == "multipart-1"
+
+    signed = issue_part_urls(
+        created.session_id,
+        "browser-a",
+        (PartUploadRequest(1, CHECKSUM),),
+        gateway,
+        object_id=large_object.id,
+    )
+    assert signed[0].url.endswith("/part")
+    assert gateway.part_calls == [
+        (large_object.s3_key, "multipart-1", 1, CHECKSUM)
+    ]
 
 
 @pytest.mark.django_db

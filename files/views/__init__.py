@@ -1,7 +1,20 @@
 # Import all views for backward compatibility
 
 from .auth import custom_login_view, saml_metadata  # noqa: F401
-from .aws_uploads import UploadCollectionView, UploadDetailView, UploadLeaseAcquireView  # noqa: F401
+from .aws_uploads import (  # noqa: F401
+    UploadCollectionView,
+    UploadCancelView,
+    UploadCompleteView,
+    UploadDetailView,
+    UploadLeaseAcquireView,
+    UploadLeaseHeartbeatView,
+    UploadObjectRegisterView,
+    UploadObjectUrlView,
+    UploadPauseView,
+    UploadPartUrlsView,
+    UploadReconcileView,
+    UploadResumeView,
+)
 from .categories import CategoryList, CategoryListContributor, TagList  # noqa: F401
 from .comments import CommentDetail, CommentList  # noqa: F401
 from .encoding import EncodeProfileList  # noqa: F401

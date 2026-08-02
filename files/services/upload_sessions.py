@@ -400,7 +400,7 @@ def issue_hls_object_url(session_id, owner_token, object_id, gateway):
     )
 
 
-def issue_part_urls(session_id, owner_token, part_requests, gateway):
+def issue_part_urls(session_id, owner_token, part_requests, gateway, object_id=None):
     require_upload_lease(session_id, owner_token)
     requests = tuple(part_requests)
     if not requests or len(requests) > 20:
@@ -408,7 +408,10 @@ def issue_part_urls(session_id, owner_token, part_requests, gateway):
     if len({request.part_number for request in requests}) != len(requests):
         raise InvalidUploadCommand("Part numbers must not be duplicated.")
     session = BrowserUploadSession.objects.get(pk=session_id)
-    upload_object = session.upload_objects.get()
+    object_query = session.upload_objects
+    upload_object = object_query.get(pk=object_id) if object_id is not None else object_query.get()
+    if upload_object.strategy != BrowserUploadStrategy.MULTIPART:
+        raise InvalidUploadCommand("Part URLs require a Multipart upload object.")
     maximum_part = ceil(upload_object.expected_size / session.part_size)
     if any(request.part_number < 1 or request.part_number > maximum_part for request in requests):
         raise InvalidUploadCommand("Part number is outside the expected file range.")
