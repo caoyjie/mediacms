@@ -147,14 +147,14 @@ git commit -m "feat: add media processing state foundation"
 - Create: `files/models/assets.py`
 - Modify: `files/models/media.py`
 - Modify: `files/models/__init__.py`
-- Modify: `files/migrations/0021_aws_domain_foundation.py` by regenerating before the migration is shared
+- Create: `files/migrations/0022_media_asset_version.py`; `0021` is already committed and must not be rewritten
 - Create: `tests/aws_domain/test_media_assets.py`
 
 **Interfaces:**
 - Consumes: `MediaProcessingStatus` from Task 1.
 - Produces: `MediaAssetVersion.Status`, `MediaAsset.Kind`, `Media.active_asset_version` and exact `(version, s3_key)` uniqueness.
 
-- [ ] **Step 1: Write failing version integrity tests**
+- [x] **Step 1: Write failing version integrity tests**
 
 ```python
 import pytest
@@ -182,34 +182,34 @@ def test_active_pointer_references_a_complete_version():
     assert media.active_asset_version_id == version.id
 ```
 
-- [ ] **Step 2: Run tests and verify missing models fail**
+- [x] **Step 2: Run tests and verify missing models fail**
 
 Run: `pytest tests/aws_domain/test_media_assets.py -q`
 
 Expected: FAIL importing `MediaAsset` and `MediaAssetVersion`.
 
-- [ ] **Step 3: Implement focused asset models**
+- [x] **Step 3: Implement focused asset models**
 
 Use UUID primary keys. `MediaAssetVersion` initially has `media=ForeignKey(PROTECT, related_name="asset_versions")`, `status=candidate|active|retired`, `manifest_key`, `activated_at`, `created_at`, and `updated_at`. Task 3 adds the Attempt link after `MediaJobAttempt` exists. `MediaAsset` has `version=ForeignKey(CASCADE, related_name="assets")`, `kind=hls_master|hls_variant|hls_segment|poster|thumbnail|subtitle|audio`, `s3_key`, `checksum`, `size_bytes`, and `content_type`. Add `UniqueConstraint(fields=("version", "s3_key"), name="files_asset_key_per_version_uniq")`.
 
 Add nullable `Media.active_asset_version=ForeignKey("MediaAssetVersion", SET_NULL, related_name="active_for_media")`. Model-level circular ownership is allowed, but Task 4 must validate that the selected version belongs to the locked Media before activation.
 
-- [ ] **Step 4: Regenerate and inspect the files migration**
+- [x] **Step 4: Generate and inspect the asset migration**
 
-Run: `python manage.py makemigrations files --name aws_domain_foundation`
+Run: `python manage.py makemigrations files --name media_asset_version`
 
-Expected: the same unshared migration now creates both asset models and the Media pointer, with no data migration.
+Expected: `0022_media_asset_version.py` creates both asset models and the Media pointer, with no data migration or unrelated alterations.
 
-- [ ] **Step 5: Run asset and processing tests**
+- [x] **Step 5: Run asset and processing tests**
 
 Run: `pytest tests/aws_domain/test_media_assets.py tests/aws_domain/test_media_processing_state.py -q`
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
-git add files/models/assets.py files/models/media.py files/models/__init__.py files/migrations/0021_aws_domain_foundation.py tests/aws_domain/test_media_assets.py
+git add files/models/assets.py files/models/media.py files/models/__init__.py files/migrations/0022_media_asset_version.py tests/aws_domain/test_media_assets.py
 git commit -m "feat: add versioned media assets"
 ```
 

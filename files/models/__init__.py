@@ -1,4 +1,5 @@
 # Import all models for backward compatibility
+from .assets import MediaAsset, MediaAssetVersion  # noqa: F401
 from .category import Category, Tag  # noqa: F401
 from .comment import Comment  # noqa: F401
 from .domain import DeletionStatus, MediaProcessingStatus, StorageBackend, encoding_status_for  # noqa: F401
