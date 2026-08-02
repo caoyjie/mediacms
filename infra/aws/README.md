@@ -45,3 +45,16 @@ The certificate template is not deployed until a real media hostname is approved
 ```bash
 deploy/scripts/describe_acm_validation.sh CERTIFICATE_STACK_NAME
 ```
+
+## Validation evidence
+
+Validated on 2026-08-02 in `us-east-1` without creating a Stack:
+
+- AWS CLI `2.32.6`; `cfn-lint 1.53.3`; pytest `9.1.1`; PyYAML `6.0.3`.
+- Both templates passed local `cfn-lint` and AWS CloudFormation `validate-template` using profile `default`.
+- The intended AWS account was confirmed without recording its account ID.
+- The account-derived dev bucket override returned an unambiguous 404 and was available at validation time.
+- Core template SHA-256: `a1b802ff18f3af96a5459810bce50b672de42d5aeb59fd5fb2ef5115393a94a6`.
+- Certificate template SHA-256: `3e0a93bdbc47a35a9a07cbebd3565a161775638a16622ce5fdfc1677aec83973`.
+
+Bucket availability is time-sensitive and must be checked again immediately before creating the initial Change Set.
