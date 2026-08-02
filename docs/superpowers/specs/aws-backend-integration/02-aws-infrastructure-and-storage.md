@@ -8,7 +8,7 @@
 
 - 区域固定为 `us-east-1`。
 - S3 Bucket 默认物理名：`mediacms-${AWS::AccountId}-us-east-1`；参数可覆盖，但部署前必须验证全球唯一。
-- 新建私有 S3、MediaConvert Service Role、应用 IAM Role/Policy、版本化 Job Template、CloudWatch 告警、CloudFront Distribution、OAC、Key Group 和签名公钥。
+- 新建私有 S3、MediaConvert Service Role、应用 IAM Runtime User/Policy、版本化 Job Template、CloudWatch 告警、CloudFront Distribution、OAC、Key Group 和签名公钥。
 - S3 启用 Block Public Access、默认加密、Multipart 生命周期清理和最小 CORS。
 - CloudFront 仅通过 OAC 读 S3；S3 不提供公共 URL。
 - CloudFormation 输出 Bucket、Distribution ID/Domain、Key Pair ID、MediaConvert Role ARN 和应用所需配置。
@@ -27,11 +27,32 @@ candidates/{media_id}/{attempt_id}/subtitles/...
 
 ## 3. IAM 最小权限
 
+### 3.1 生产运行时身份
+
+生产服务器位于 AWS 外部的荧光云。MVP 采用与参考项目一致的独立 IAM Runtime User 模式，不引入 IAM Roles Anywhere：
+
+- CloudFormation 创建无控制台密码的专用 IAM User、AccessKey、最小权限 Policy 和 Secrets Manager Secret。
+- Secret 以 JSON 保存 `AWS_ACCESS_KEY_ID` 与 `AWS_SECRET_ACCESS_KEY`；Stack Outputs 只输出 Secret ARN 和非秘密资源标识，禁止输出密钥值。
+- 管理员使用本地 AWS CLI `default` profile 读取 Secret，并写入生产机 `/etc/mediacms/secrets/aws-runtime.env`；该文件归属 `root:mediacms`、权限 `0640`。
+- Web 与 Worker 通过 Compose `env_file` 使用该文件；不得挂载管理员 `~/.aws`，不得把凭证写入镜像、Git、数据库、日志或环境探查报告。
+- dev/prod 使用不同 Stack、IAM User、AccessKey、Secret 和策略作用域。运行时身份不能调用 CloudFormation、IAM 管理 API、Secrets Manager 读取 API或操作其他项目 Bucket。
+- 长期 AccessKey 是降低单机 MVP 运维复杂度后的明确权衡。至少每 90 天审查 `AccessKeyLastUsed` 和密钥年龄；禁止原地覆盖且不留回退凭证。
+- CloudFormation 以 `RuntimeAccessKeyAEnabled`、`RuntimeAccessKeyBEnabled` 和 `RuntimeActiveAccessKeySlot=A|B` 管理两个 Key 槽位。初始仅启用 A。轮换固定使用三个独立 Change Set：先启用 B且Secret仍指向A；再把Secret切到B、重新提取生产env并完成健康检查和观察；最后禁用A。下一轮反向执行。任意时刻最多存在两把Key，禁止单资源 replacement 在同次更新中直接删除回退Key。
+- CloudFormation `Rules` 必须拒绝“两个槽位都关闭”以及“Active Slot 对应槽位未启用”的参数组合，避免 Secret 引用不存在的 AccessKey。
+- 首次创建和后续轮换都由 CloudFormation 完成，不得使用零散 `aws iam create-access-key` 绕过 Stack。
+- Secret 使用 `DeletionPolicy: RetainExceptOnCreate` 与 `UpdateReplacePolicy: Retain`；生产 Stack 删除和遗留凭证清理属于单独破坏性审批，不随普通部署执行。
+
+部署机 `default` profile 仅创建/更新/验收 Stack和读取一次运行时 Secret，不复制到生产容器。生产应用仅使用 Runtime User 凭证。
+
+### 3.2 权限边界
+
 应用角色只允许：
 
 - 对限定前缀发起、列出、完成和中止 Multipart；Head/Get/Put/Delete 必须限定到业务 Key。
 - 创建、查询和取消属于本应用的 MediaConvert Job，并仅能 `iam:PassRole` 给指定服务角色。
 - 读取 CloudFront 签名配置所需的非秘密标识；私钥由应用秘密存储提供。
+
+这里的“应用角色”在 MVP 物理实现中对应上述 Runtime User Policy；权限语义保持一致，未来迁移到临时 Role 时不改变应用接口。
 
 MediaConvert 服务角色只允许读取 `originals/` 或明确输入 Key，并写当前 Attempt 的 `candidates/` 前缀。浏览器预签名请求限制 Key、方法、Content-Type、过期时间和可验证的大小/校验信息。
 

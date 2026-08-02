@@ -35,12 +35,15 @@ Cloudflare Tunnel 只路由页面/API。Nginx、Django 和容器请求体限制�
 - 私有 S3 Bucket（默认 `mediacms-${AWS::AccountId}-us-east-1`）、加密、CORS、Block Public Access 和生命周期规则。
 - MediaConvert Service Role 与最小 Bucket 前缀权限。
 - `mediacms-video-hls-v1` 与 `mediacms-audio-hls-v1` 两个版本化 Job Template。
-- 应用 Role/Policy 或部署环境绑定所需的最小凭证。
+- 应用 IAM Runtime User/Policy、A/B AccessKey 槽位和 Secrets Manager 运行时凭证。
+- AWS 外部生产机使用独立 IAM Runtime User；CloudFormation 创建 AccessKey 并保存到 Secrets Manager，Stack 不输出密钥值。管理员读取一次后写入生产机权限为 `0640` 的 `/etc/mediacms/secrets/aws-runtime.env`，Compose 只通过 `env_file` 注入 Web/Worker。
 - CloudFront Distribution、OAC、Key Group、公钥及缓存行为。
 - CloudWatch Dashboard、应用自定义任务时长指标和告警。
 - 参数化域名、Bucket 覆盖名、日志/保留期；输出非秘密资源标识。
 
 私钥和 Django 加密密钥通过独立 Secret 注入，不写入模板输出。部署需幂等；删除 Stack 时生产 Bucket 使用 Retain，避免测试脚本误删媒体。
+
+Runtime User 长期密钥至少每 90 天审查并按 CloudFormation A/B 双槽位流程轮换。轮换依次启用备用槽、切换 Secret/生产 env 并验证、最后禁用旧槽；每一步使用独立 Change Set，不允许用零散 IAM create 命令旁路 Stack。旧 Key 只有在新 Key 完成 S3、MediaConvert 和 CloudWatch 健康检查并经过观察后才能删除。
 
 CloudWatch 至少覆盖：
 
