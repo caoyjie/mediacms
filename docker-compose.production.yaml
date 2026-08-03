@@ -1,0 +1,236 @@
+services:
+  migrations:
+    image: ${MEDIACMS_IMAGE:-ghcr.io/caoyjie/mediacms:REPLACEME}
+    environment:
+      ENABLE_UWSGI: 'no'
+      ENABLE_NGINX: 'no'
+      ENABLE_CELERY_SHORT: 'no'
+      ENABLE_CELERY_LONG: 'no'
+      ENABLE_CELERY_BEAT: 'no'
+      ENABLE_MIGRATIONS: 'yes'
+      ADMIN_USER: ${ADMIN_USER}
+      ADMIN_EMAIL: ${ADMIN_EMAIL}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      POSTGRES_HOST: ${POSTGRES_HOST:-db}
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      POSTGRES_NAME: ${POSTGRES_NAME}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      REDIS_LOCATION: ${REDIS_LOCATION}
+      SECRET_KEY: ${SECRET_KEY}
+      FRONTEND_HOST: ${FRONTEND_HOST}
+      PORTAL_NAME: ${PORTAL_NAME}
+      AWS_REGION: ${AWS_REGION}
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION}
+      AWS_ENVIRONMENT: ${AWS_ENVIRONMENT}
+    command: "./deploy/docker/prestart.sh"
+    restart: on-failure
+    depends_on:
+      redis:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  web:
+    image: ${MEDIACMS_IMAGE:-ghcr.io/caoyjie/mediacms:REPLACEME}
+    # Port 443 is owned by xray; do NOT bind 80/443 directly
+    # Production deployment must use external reverse proxy (nginx/caddy/traefik)
+    # that forwards to this container's port 80
+    ports:
+      - "${MEDIACMS_WEB_PORT:-8080}:80"
+    environment:
+      ENABLE_CELERY_BEAT: 'no'
+      ENABLE_CELERY_SHORT: 'no'
+      ENABLE_CELERY_LONG: 'no'
+      ENABLE_MIGRATIONS: 'no'
+      ENABLE_UWSGI: 'yes'
+      ENABLE_NGINX: 'yes'
+      POSTGRES_HOST: ${POSTGRES_HOST:-db}
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      POSTGRES_NAME: ${POSTGRES_NAME}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      REDIS_LOCATION: ${REDIS_LOCATION}
+      SECRET_KEY: ${SECRET_KEY}
+      FRONTEND_HOST: ${FRONTEND_HOST}
+      PORTAL_NAME: ${PORTAL_NAME}
+      AWS_REGION: ${AWS_REGION}
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION}
+      AWS_ENVIRONMENT: ${AWS_ENVIRONMENT}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      AWS_MEDIA_BUCKET: ${AWS_MEDIA_BUCKET}
+      AWS_MEDIACONVERT_ROLE_ARN: ${AWS_MEDIACONVERT_ROLE_ARN}
+      AWS_MEDIACONVERT_VIDEO_TEMPLATE: ${AWS_MEDIACONVERT_VIDEO_TEMPLATE:-mediacms-prod-video-hls-v1}
+      AWS_MEDIACONVERT_AUDIO_TEMPLATE: ${AWS_MEDIACONVERT_AUDIO_TEMPLATE:-mediacms-prod-audio-hls-v1}
+      DEBUG: 'False'
+    depends_on:
+      migrations:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          memory: 1024M
+    restart: unless-stopped
+
+  celery_beat:
+    image: ${MEDIACMS_IMAGE:-ghcr.io/caoyjie/mediacms:REPLACEME}
+    environment:
+      ENABLE_UWSGI: 'no'
+      ENABLE_NGINX: 'no'
+      ENABLE_CELERY_SHORT: 'no'
+      ENABLE_CELERY_LONG: 'no'
+      ENABLE_CELERY_BEAT: 'yes'
+      ENABLE_MIGRATIONS: 'no'
+      POSTGRES_HOST: ${POSTGRES_HOST:-db}
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      POSTGRES_NAME: ${POSTGRES_NAME}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      REDIS_LOCATION: ${REDIS_LOCATION}
+      SECRET_KEY: ${SECRET_KEY}
+      FRONTEND_HOST: ${FRONTEND_HOST}
+      PORTAL_NAME: ${PORTAL_NAME}
+      AWS_REGION: ${AWS_REGION}
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION}
+      AWS_ENVIRONMENT: ${AWS_ENVIRONMENT}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      AWS_MEDIA_BUCKET: ${AWS_MEDIA_BUCKET}
+      AWS_MEDIACONVERT_ROLE_ARN: ${AWS_MEDIACONVERT_ROLE_ARN}
+      AWS_MEDIACONVERT_VIDEO_TEMPLATE: ${AWS_MEDIACONVERT_VIDEO_TEMPLATE:-mediacms-prod-video-hls-v1}
+      AWS_MEDIACONVERT_AUDIO_TEMPLATE: ${AWS_MEDIACONVERT_AUDIO_TEMPLATE:-mediacms-prod-audio-hls-v1}
+      DEBUG: 'False'
+    depends_on:
+      migrations:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    restart: unless-stopped
+
+  celery_worker:
+    image: ${MEDIACMS_IMAGE:-ghcr.io/caoyjie/mediacms:REPLACEME}
+    environment:
+      ENABLE_UWSGI: 'no'
+      ENABLE_NGINX: 'no'
+      ENABLE_CELERY_SHORT: 'yes'
+      ENABLE_CELERY_LONG: 'yes'
+      ENABLE_CELERY_BEAT: 'no'
+      ENABLE_MIGRATIONS: 'no'
+      POSTGRES_HOST: ${POSTGRES_HOST:-db}
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      POSTGRES_NAME: ${POSTGRES_NAME}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      REDIS_LOCATION: ${REDIS_LOCATION}
+      SECRET_KEY: ${SECRET_KEY}
+      FRONTEND_HOST: ${FRONTEND_HOST}
+      PORTAL_NAME: ${PORTAL_NAME}
+      AWS_REGION: ${AWS_REGION}
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION}
+      AWS_ENVIRONMENT: ${AWS_ENVIRONMENT}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      AWS_MEDIA_BUCKET: ${AWS_MEDIA_BUCKET}
+      AWS_MEDIACONVERT_ROLE_ARN: ${AWS_MEDIACONVERT_ROLE_ARN}
+      AWS_MEDIACONVERT_VIDEO_TEMPLATE: ${AWS_MEDIACONVERT_VIDEO_TEMPLATE:-mediacms-prod-video-hls-v1}
+      AWS_MEDIACONVERT_AUDIO_TEMPLATE: ${AWS_MEDIACONVERT_AUDIO_TEMPLATE:-mediacms-prod-audio-hls-v1}
+      DEBUG: 'False'
+      CELERY_WORKER_CONCURRENCY: ${CELERY_WORKER_CONCURRENCY:-1}
+    depends_on:
+      migrations:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 1536M
+    restart: unless-stopped
+
+  celery_metadata:
+    image: ${MEDIACMS_IMAGE:-ghcr.io/caoyjie/mediacms:REPLACEME}
+    environment:
+      ENABLE_UWSGI: 'no'
+      ENABLE_NGINX: 'no'
+      ENABLE_CELERY_SHORT: 'no'
+      ENABLE_CELERY_LONG: 'no'
+      ENABLE_CELERY_BEAT: 'no'
+      ENABLE_MIGRATIONS: 'no'
+      POSTGRES_HOST: ${POSTGRES_HOST:-db}
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      POSTGRES_NAME: ${POSTGRES_NAME}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      REDIS_LOCATION: ${REDIS_LOCATION}
+      SECRET_KEY: ${SECRET_KEY}
+      FRONTEND_HOST: ${FRONTEND_HOST}
+      PORTAL_NAME: ${PORTAL_NAME}
+      AWS_REGION: ${AWS_REGION}
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION}
+      AWS_ENVIRONMENT: ${AWS_ENVIRONMENT}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      AWS_MEDIA_BUCKET: ${AWS_MEDIA_BUCKET}
+      AWS_MEDIACONVERT_ROLE_ARN: ${AWS_MEDIACONVERT_ROLE_ARN}
+      AWS_MEDIACONVERT_VIDEO_TEMPLATE: ${AWS_MEDIACONVERT_VIDEO_TEMPLATE:-mediacms-prod-video-hls-v1}
+      AWS_MEDIACONVERT_AUDIO_TEMPLATE: ${AWS_MEDIACONVERT_AUDIO_TEMPLATE:-mediacms-prod-audio-hls-v1}
+      DEBUG: 'False'
+    command: /bin/bash -c "celery -A cms worker --loglevel=INFO -Q youtube_metadata --concurrency=1 --prefetch-multiplier=1"
+    depends_on:
+      migrations:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    restart: unless-stopped
+
+  db:
+    image: postgres:17.2-alpine
+    volumes:
+      - /var/lib/mediacms/postgres_data:/var/lib/postgresql/data/
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_NAME}
+      TZ: ${TZ:-UTC}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -d $${POSTGRES_DB} -U $${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    restart: unless-stopped
+
+  redis:
+    image: redis:alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    restart: unless-stopped
