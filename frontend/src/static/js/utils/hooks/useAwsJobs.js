@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 export function useAwsJobs({ enabled = true, interval = 5000 } = {}) {
     const [jobs, setJobs] = useState([]);
     const [error, setError] = useState(null);
+    const [refreshKey, setRefreshKey] = useState(0);
     useEffect(() => {
         if (!enabled) return undefined;
         let active = true;
@@ -27,6 +28,6 @@ export function useAwsJobs({ enabled = true, interval = 5000 } = {}) {
             active = false;
             if (timer) window.clearTimeout(timer);
         };
-    }, [enabled, interval]);
-    return { jobs, error };
+    }, [enabled, interval, refreshKey]);
+    return { jobs, error, refresh: () => setRefreshKey((value) => value + 1) };
 }

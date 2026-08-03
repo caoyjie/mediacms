@@ -7,7 +7,15 @@ function statusLabel(job) {
 }
 
 export default function AwsTaskCenter() {
-    const { jobs, error } = useAwsJobs();
+    const { jobs, error, refresh } = useAwsJobs();
+    async function action(job, actionName) {
+        const response = await fetch(`/api/v1/aws/jobs/${job.job_id}/${actionName}/`, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'X-CSRFToken': document.cookie.split(';').map((item) => item.trim()).find((item) => item.startsWith('csrftoken='))?.slice(10) || '' },
+        });
+        if (response.ok) refresh();
+    }
     return (
         <section className="aws-task-center" aria-label="AWS task center">
             <h2>Task Center</h2>
@@ -19,6 +27,8 @@ export default function AwsTaskCenter() {
                     <span>{job.statusLabel || statusLabel(job)}</span>
                     <progress max="100" value={Number(job.progress) || 0} aria-label={`${job.title || 'Task'} progress`} />
                     <span>{Number(job.progress) || 0}%</span>
+                    {['queued', 'running'].includes(job.status) ? <button type="button" onClick={() => action(job, 'cancel')}>Cancel</button> : null}
+                    {['failed', 'canceled'].includes(job.status) ? <button type="button" onClick={() => action(job, 'resume')}>Resume</button> : null}
                 </li>)}
             </ul>
         </section>
