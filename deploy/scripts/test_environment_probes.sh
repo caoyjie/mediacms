@@ -8,6 +8,14 @@ scripts=(
     "$script_dir/probe_ubuntu_production_environment.sh"
 )
 
+test_script="$script_dir/run_backend_tests.sh"
+test -f "$test_script"
+test -x "$test_script"
+bash -n "$test_script"
+grep -Fq 'REDIS_LOCATION' "$test_script"
+grep -Fq 'docker inspect' "$test_script"
+grep -Fq 'POSTGRES_PORT' "$test_script"
+
 for script in "${scripts[@]}"; do
     test -f "$script"
     test -x "$script"

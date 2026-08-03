@@ -248,7 +248,7 @@ Backend focused tests that can run without PostgreSQL:
 .venv/bin/pytest tests/aws_domain/test_cloudfront_auth.py tests/aws_domain/test_asset_urls.py -q
 ```
 
-The latest results were successful. Database-backed tests currently require the PostgreSQL test container to be running on `127.0.0.1:55432`.
+The latest results were successful. Database-backed tests require the PostgreSQL test container to be running on `127.0.0.1:55432` and the existing Redis development container to be running. Use the repository test runner below; it discovers the current Redis bridge IP after container restarts.
 
 Start the test database manually:
 
@@ -265,16 +265,19 @@ docker run --detach --name mediacms-aws-test-postgres \
   postgres:17.2-alpine
 ```
 
-Run AWS-domain tests:
+Run the complete backend suite:
 
 ```bash
-POSTGRES_HOST=127.0.0.1 POSTGRES_PORT=55432 \
-POSTGRES_NAME=mediacms_test POSTGRES_USER=mediacms_test \
-POSTGRES_PASSWORD=mediacms_test_local_only \
-.venv/bin/pytest tests/aws_domain -q
+deploy/scripts/run_backend_tests.sh
 ```
 
-The earlier full AWS suite reached `293 passed` before the YouTube/CloudFront additions. Repeat the full suite after the database container is restored.
+Focused tests can be passed through to pytest:
+
+```bash
+deploy/scripts/run_backend_tests.sh tests/aws_domain/test_playback_progress.py -q
+```
+
+The current local full backend suite reaches `426 passed` with the PostgreSQL and Redis containers running. The frontend suite reaches `207 passed` across `32` Jest suites.
 
 Real dev acceptance already passed for one short video and one short audio through MediaConvert, including output verification and exact cleanup. The acceptance command and evidence are in `docs/superpowers/plans/2026-08-02-mediaconvert-core-orchestration.md` and `docs/superpowers/specs/aws-backend-integration/07-deployment-and-acceptance.md`.
 
