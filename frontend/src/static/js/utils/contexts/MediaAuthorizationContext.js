@@ -1,6 +1,8 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import UserContext from './UserContext';
 import { refreshMediaAuthorization } from '../services/mediaAuthorization';
+import { installMediaAuthorizationInterceptor } from '../services/mediaAuthorization';
+import axios from 'axios';
 
 const MediaAuthorizationContext = createContext({ expiresAt: null, refresh: () => Promise.resolve() });
 
@@ -29,6 +31,12 @@ export function MediaAuthorizationProvider({ children }) {
             if (timer.current) window.clearTimeout(timer.current);
         };
     }, [user.isAnonymous, expiresAt, refresh]);
+
+    useEffect(() => {
+        if (user.isAnonymous) return undefined;
+        const mediaDomain = window.MediaCMS && window.MediaCMS.config && window.MediaCMS.config.aws_cloudfront_domain;
+        return installMediaAuthorizationInterceptor(axios, { mediaDomain });
+    }, [user.isAnonymous]);
 
     return <MediaAuthorizationContext.Provider value={{ expiresAt, refresh }}>{children}</MediaAuthorizationContext.Provider>;
 }
