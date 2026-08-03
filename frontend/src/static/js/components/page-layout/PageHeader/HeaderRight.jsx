@@ -5,6 +5,7 @@ import { HeaderConsumer, MemberConsumer, LinksConsumer } from '../../../utils/co
 import { CircleIconButton, MaterialIcon, NavigationContentApp, NavigationMenuList, PopupTop, PopupMain, UserThumbnail } from '../../_shared';
 import { HeaderThemeSwitcher } from './HeaderThemeSwitcher';
 import { translateString } from '../../../utils/helpers/';
+import AwsTaskCenter from '../../task-center/AwsTaskCenter';
 
 function headerPopupPages(user, popupNavItems, hasHeaderThemeSwitcher) {
   const pages = {
@@ -108,6 +109,23 @@ function UploadMediaButton({ user, links }) {
     </div>
   ) : null;
 }
+
+function TaskCenterButton({ user }) {
+  const [popupContentRef, PopupContent, PopupTrigger] = usePopup();
+  if (user.is.anonymous) return null;
+  return (
+    <div className="task-center-header-control">
+      <PopupTrigger contentRef={popupContentRef}>
+        <CircleIconButton title="Task Center" aria-label="Task Center">
+          <MaterialIcon type="pending_actions" />
+        </CircleIconButton>
+      </PopupTrigger>
+      <PopupContent contentRef={popupContentRef}>
+        <PopupMain><AwsTaskCenter /></PopupMain>
+      </PopupContent>
+    </div>
+  );
+}
 function LoginButton({ user, link, hasHeaderThemeSwitcher }) {
   return user.is.anonymous && user.can.login ? (
     <div className="sign-in-wrap">
@@ -162,6 +180,7 @@ export function HeaderRight(props) {
                     </div>
 
                     <UploadMediaButton user={user} links={links} />
+                    <TaskCenterButton user={user} />
 
                     <div
                       className={
