@@ -15,8 +15,8 @@ from django.utils import timezone
 from files.models import AttemptArtifact, MediaJobCheckpoint, MediaIngestionJob
 from files.models.ingestion import ArtifactCleanupStatus, ArtifactPurpose, CheckpointStatus
 from files.services.processing_storage import ObjectEvidence
-from files.services.youtube import CaptionTrack, choose_caption_tracks, extract_info, download_source, fetch_caption_text
-from files.services.subtitles import build_bilingual_webvtt, normalize_webvtt, parse_webvtt
+from files.services.youtube import CaptionTrack, choose_caption_tracks, discovered_caption_tracks, extract_info, download_source, fetch_caption_text
+from files.services.subtitles import build_bilingual_webvtt, normalize_caption_payload, parse_webvtt
 from files.services.youtube_cookies import materialize_cookie
 from files.services.youtube_cookies import latest_cookie
 
@@ -162,9 +162,7 @@ def run_youtube_step(attempt, *, now=None):
                 "thumbnail": metadata.thumbnail,
                 "caption_tracks": {
                     language: {"url": track.url, "kind": track.kind}
-                    for language, track in choose_caption_tracks(
-                        {**(info.get("subtitles") or {}), **(info.get("automatic_captions") or {})}
-                    ).items()
+                    for language, track in choose_caption_tracks(discovered_caption_tracks(info)).items()
                 },
             },
             completed_at=now,
@@ -189,7 +187,11 @@ def run_youtube_step(attempt, *, now=None):
             subtitle_checkpoint(attempt, status=CheckpointStatus.UNAVAILABLE, evidence={"reason": "no subtitles were offered"}, now=now)
             return "subtitles"
         try:
-            sources = {language: normalize_webvtt(fetch_caption_text(track)) for language, track in tracks.items()}
+            with materialize_cookie(cookie, directory=settings.TEMP_DIRECTORY) as cookie_file:
+                sources = {
+                    language: normalize_caption_payload(fetch_caption_text(track, cookie_file=cookie_file))
+                    for language, track in tracks.items()
+                }
             published = {language: text for language, text in sources.items()}
             if "zh" in sources and "en" in sources:
                 published["bilingual"] = build_bilingual_webvtt(parse_webvtt(sources["zh"]), parse_webvtt(sources["en"]))

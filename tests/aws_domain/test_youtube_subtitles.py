@@ -1,9 +1,10 @@
 import pytest
 
-from files.services.youtube import CaptionTrack, classify_ytdlp_error, fetch_caption_text, normalize_youtube_url, choose_caption_tracks
+from files.services.youtube import CaptionTrack, classify_ytdlp_error, discovered_caption_tracks, fetch_caption_text, normalize_youtube_url, choose_caption_tracks
 from files.services.subtitles import (
     SubtitleCue,
     build_bilingual_webvtt,
+    normalize_caption_payload,
     normalize_webvtt,
     parse_webvtt,
 )
@@ -29,6 +30,14 @@ def test_caption_selection_prefers_manual_then_language_variants():
     assert tracks["en"].url == "en-auto"
 
 
+def test_discovered_tracks_do_not_replace_manual_with_automatic():
+    tracks = discovered_caption_tracks({
+        "subtitles": {"en": [{"url": "manual"}]},
+        "automatic_captions": {"en": [{"url": "automatic"}]},
+    })
+    assert choose_caption_tracks(tracks)["en"].url == "manual"
+
+
 def test_webvtt_normalization_and_bilingual_matching_is_time_based():
     zh = "WEBVTT\n\n00:00:00.000 --> 00:00:02.000\n你好\n"
     en = "WEBVTT\n\n00:00:00.500 --> 00:00:02.500\nhello\n"
@@ -39,8 +48,16 @@ def test_webvtt_normalization_and_bilingual_matching_is_time_based():
     assert "你好 / hello" in bilingual
 
 
+def test_json3_caption_payload_is_converted_to_webvtt():
+    payload = '{"events":[{"tStartMs":0,"dDurationMs":1500,"segs":[{"utf8":"hello"}]}]}'
+    result = normalize_caption_payload(payload)
+    assert result.startswith("WEBVTT")
+    assert "hello" in result
+
+
 def test_subtitle_failure_classification_is_safe():
     assert classify_ytdlp_error("Sign in to confirm your age") == "cookies"
+    assert classify_ytdlp_error("The provided YouTube account cookies are no longer valid") == "cookies"
     assert classify_ytdlp_error("HTTP Error 429: Too Many Requests") == "retryable"
     assert classify_ytdlp_error("no subtitles available") == "unavailable"
     assert classify_ytdlp_error("some unknown failure") == "unknown"

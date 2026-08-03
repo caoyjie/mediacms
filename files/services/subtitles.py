@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 import html
+import json
 import re
 
 
@@ -70,6 +71,28 @@ def normalize_webvtt(value):
         f"{_timestamp(cue.start)} --> {_timestamp(cue.end)}\n{html.escape(cue.text)}"
         for cue in cues
     ) + ("\n" if cues else "")
+
+
+def normalize_caption_payload(value):
+    """Normalize WebVTT or YouTube JSON3 caption payload to WebVTT."""
+    stripped = value.lstrip()
+    if not stripped.startswith("{"):
+        return normalize_webvtt(value)
+    try:
+        document = json.loads(value)
+        events = document.get("events", [])
+    except (TypeError, ValueError, AttributeError) as error:
+        raise ValueError("caption payload is not valid JSON3") from error
+    cues = []
+    for event in events:
+        start = float(event.get("tStartMs", 0)) / 1000
+        duration = float(event.get("dDurationMs", 0)) / 1000
+        text = "".join(segment.get("utf8", "") for segment in event.get("segs", []))
+        if duration > 0 and text.strip():
+            cues.append(SubtitleCue(start, start + duration, text.replace("\n", " ")))
+    return normalize_webvtt("WEBVTT\n\n" + "\n\n".join(
+        f"{_timestamp(cue.start)} --> {_timestamp(cue.end)}\n{cue.text}" for cue in cues
+    ))
 
 
 def build_bilingual_webvtt(primary, secondary, *, proximity=1.0):

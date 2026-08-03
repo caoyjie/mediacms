@@ -45,12 +45,28 @@ def choose_caption_tracks(raw):
     return {language: track for language in ("zh", "en") if (track := choose(language))}
 
 
-def fetch_caption_text(track, *, opener=urlopen):
+def discovered_caption_tracks(info):
+    """Return manual and automatic captions without allowing automatic tracks to overwrite manual ones."""
+    inventory = {}
+    for code, values in (info.get("subtitles") or {}).items():
+        inventory.setdefault(code, []).extend({**item, "kind": "manual"} for item in values or [])
+    for code, values in (info.get("automatic_captions") or {}).items():
+        inventory.setdefault(code, []).extend({**item, "kind": "automatic"} for item in values or [])
+    return inventory
+
+
+def fetch_caption_text(track, *, opener=None, cookie_file=None):
     if not isinstance(track, CaptionTrack) or not track.url.startswith(("https://", "http://")):
         raise ValueError("caption URL is invalid")
     request = Request(track.url, headers={"User-Agent": "MediaCMS/1.0"})
-    with opener(request, timeout=30) as response:
-        payload = response.read(4 * 1024 * 1024 + 1)
+    if opener is None and cookie_file is not None:
+        import yt_dlp
+        with yt_dlp.YoutubeDL({"quiet": True, "cookiefile": str(cookie_file)}) as downloader:
+            response = downloader.urlopen(request)
+            payload = response.read(4 * 1024 * 1024 + 1)
+    else:
+        with (opener or urlopen)(request, timeout=30) as response:
+            payload = response.read(4 * 1024 * 1024 + 1)
     if len(payload) > 4 * 1024 * 1024:
         raise ValueError("caption file is too large")
     return payload.decode("utf-8-sig")
@@ -58,7 +74,7 @@ def fetch_caption_text(track, *, opener=urlopen):
 
 def classify_ytdlp_error(message):
     lowered = str(message).lower()
-    if any(term in lowered for term in ("sign in", "age", "login", "authentication", "confirm your country")):
+    if any(term in lowered for term in ("sign in", "age", "login", "authentication", "confirm your country", "cookies are no longer valid", "provided youtube account cookies")):
         return "cookies"
     if any(term in lowered for term in ("no subtitles", "there are no subtitles", "subtitles are not available")):
         return "unavailable"
@@ -69,7 +85,12 @@ def classify_ytdlp_error(message):
 
 def extract_info(url, *, cookie_file=None):
     import yt_dlp
-    options = {"quiet": True, "skip_download": True, "noplaylist": True}
+    options = {
+        "quiet": True,
+        "skip_download": True,
+        "noplaylist": True,
+        "remote_components": ["ejs:github"],
+    }
     if cookie_file:
         options["cookiefile"] = str(cookie_file)
     with yt_dlp.YoutubeDL(options) as downloader:
@@ -88,6 +109,7 @@ def download_source(url, output_dir, *, cookie_file=None):
         "format": "bestvideo*+bestaudio/best",
         "outtmpl": str(target),
         "merge_output_format": "mp4",
+        "remote_components": ["ejs:github"],
     }
     if cookie_file:
         options["cookiefile"] = str(cookie_file)
