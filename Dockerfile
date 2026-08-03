@@ -23,6 +23,16 @@ RUN mkdir -p /home/mediacms.io/bento4 && \
     rm -rf /home/mediacms.io/bento4/docs && \
     rm Bento4-SDK-1-6-0-637.x86_64-unknown-linux.zip
 
+# yt-dlp uses Deno for YouTube's JavaScript challenge runtime. Keep the
+# runtime in the image so metadata discovery/import works in headless workers.
+ARG DENO_VERSION=2.9.4
+RUN wget -q --tries=5 --waitretry=10 --timeout=30 \
+        "https://dl.deno.land/release/v${DENO_VERSION}/deno-x86_64-unknown-linux-gnu.zip" \
+        -O /tmp/deno.zip && \
+    unzip -q /tmp/deno.zip -d /usr/local/bin && \
+    chmod 0755 /usr/local/bin/deno && \
+    rm -f /tmp/deno.zip
+
 ############ BASE RUNTIME IMAGE ############
 FROM python:3.13.5-slim-bookworm AS base
 
@@ -80,6 +90,7 @@ RUN pip install --no-cache-dir uv && \
 COPY --from=build-image /usr/local/bin/ffmpeg /usr/local/bin/ffmpeg
 COPY --from=build-image /usr/local/bin/ffprobe /usr/local/bin/ffprobe
 COPY --from=build-image /usr/local/bin/qt-faststart /usr/local/bin/qt-faststart
+COPY --from=build-image /usr/local/bin/deno /usr/local/bin/deno
 COPY --from=build-image /home/mediacms.io/bento4 /home/mediacms.io/bento4
 
 # Copy application files

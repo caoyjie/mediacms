@@ -9,6 +9,10 @@ The official `docker-compose-dev.yaml` includes two separate Celery workers:
 - `celery_metadata`: queue `youtube_metadata`, concurrency 2; metadata discovery only.
 - `celery_worker`: queue `celery`, concurrency 1; serialized download, S3, subtitle, and MediaConvert imports.
 
+The application image includes the pinned `yt-dlp` package and Deno runtime used
+by YouTube metadata/import jobs in headless containers. No host Python or browser
+installation is required for these workers.
+
 Create the local AWS environment file from the template and replace the account-specific values:
 
 ```bash
