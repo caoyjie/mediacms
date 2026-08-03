@@ -26,8 +26,8 @@ def create_youtube_job(owner, url, *, title="YouTube video", idempotency_key=Non
         user=owner,
         media_type="video",
         storage_backend=StorageBackend.AWS,
-        processing_status=MediaProcessingStatus.DRAFT,
-        encoding_status=encoding_status_for(MediaProcessingStatus.DRAFT),
+        processing_status=MediaProcessingStatus.QUEUED,
+        encoding_status=encoding_status_for(MediaProcessingStatus.QUEUED),
     )
     metadata = {"url": url, "video_id": video_id}
     if idempotency_key:
