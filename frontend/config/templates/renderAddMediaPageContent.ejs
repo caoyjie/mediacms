@@ -1,5 +1,12 @@
 import { renderPage } from './static/js/utils/renderer';
+import React from 'react';
+import ReactDOM from 'react-dom';
+import YouTubeImportPanel from './static/js/components/youtube/YouTubeImportPanel';
 
 import './static/css/AddMediaPage.scss';
 
 renderPage();
+document.addEventListener('DOMContentLoaded', () => {
+  const mount = document.getElementById('aws-youtube-import');
+  if (mount) ReactDOM.render(<YouTubeImportPanel />, mount);
+});
