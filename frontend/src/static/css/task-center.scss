@@ -1,0 +1,51 @@
+.aws-task-center {
+  width: min(520px, 78vw);
+  max-height: min(620px, 75vh);
+  overflow-y: auto;
+  padding: 16px;
+  color: var(--text-color, #222);
+}
+
+.aws-task-summary,
+.aws-task-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.aws-task-summary span {
+  border: 1px solid #ddd;
+  border-radius: 999px;
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+.aws-task-center ul,
+.aws-task-center ol {
+  margin: 8px 0;
+  padding-left: 18px;
+}
+
+.aws-task-center li {
+  display: grid;
+  grid-template-columns: minmax(100px, 1fr) auto;
+  gap: 6px;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid #eee;
+}
+
+.aws-task-center progress { width: 100%; grid-column: 1 / -1; }
+.aws-task-center button { min-height: 36px; margin: 3px; }
+
+@media (max-width: 600px) {
+  .aws-task-center {
+    width: calc(100vw - 32px);
+    max-height: 80vh;
+    padding: 12px;
+  }
+
+  .aws-task-center li { grid-template-columns: 1fr; }
+  .aws-task-center button { width: 100%; min-height: 44px; }
+}

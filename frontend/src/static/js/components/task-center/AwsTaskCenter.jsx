@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useAwsJobs } from '../../utils/hooks/useAwsJobs';
+import '../../../css/task-center.scss';
 
 function statusLabel(job) {
     if (job.status === 'failed' && job.safe_error) return job.safe_error;
