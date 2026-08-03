@@ -187,6 +187,8 @@ def run_youtube_step(attempt, *, now=None):
             attempt.job.media.metadata_sources = {"title": "youtube", "description": "youtube", "duration": "youtube"}
             attempt.job.media.save(update_fields=("title", "description", "duration", "metadata_sources", "edit_date"))
         return "metadata"
+    if not (attempt.job.source_metadata or {}).get("import_requested"):
+        return "metadata_ready"
     source_checkpoint = MediaJobCheckpoint.objects.filter(attempt=attempt, name="source_verified").first()
     if source_checkpoint is None:
         download_to_attempt(attempt, url, cookie_version=cookie, now=now)
@@ -196,6 +198,9 @@ def run_youtube_step(attempt, *, now=None):
         tracks = {}
         for language, item in (metadata_checkpoint.evidence.get("caption_tracks") or {}).items():
             tracks[language] = CaptionTrack(item["url"], language, item.get("kind", "manual"))
+        selected = (attempt.job.source_metadata or {}).get("selected_subtitle_languages")
+        if selected is not None:
+            tracks = {language: track for language, track in tracks.items() if language in selected}
         if not tracks:
             subtitle_checkpoint(attempt, status=CheckpointStatus.UNAVAILABLE, evidence={"reason": "no subtitles were offered"}, now=now)
             return "subtitles"

@@ -98,6 +98,8 @@ def _run_action(attempt, media_gateway, storage_gateway, now):
 
     if job.source_type == "youtube":
         youtube_action = run_youtube_step(attempt, now=now)
+        if youtube_action == "metadata_ready":
+            return "youtube_metadata_ready", True
         if youtube_action != "ready":
             return f"youtube_{youtube_action}", youtube_action == "failed"
 

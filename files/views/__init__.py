@@ -26,7 +26,7 @@ from .media import MediaSearch  # noqa: F401
 from .media import media_share  # noqa: F401
 from .media_auth import media_auth  # noqa: F401
 from .cloudfront_auth import bootstrap as cloudfront_bootstrap, logout as cloudfront_logout  # noqa: F401
-from .youtube import YouTubeCookieStatusView, YouTubeCookieUploadView, YouTubeJobCreateView, YouTubeJobDetailView, YouTubeJobResumeView  # noqa: F401
+from .youtube import YouTubeCookieStatusView, YouTubeCookieUploadView, YouTubeJobCreateView, YouTubeJobDetailView, YouTubeJobResumeView, YouTubeJobStartView  # noqa: F401
 from .aws_jobs import AWSJobActionView, AWSJobDetailView, AWSJobListView  # noqa: F401
 from .playback import PlaybackProgressView  # noqa: F401
 from .pages import about  # noqa: F401

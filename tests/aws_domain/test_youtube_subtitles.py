@@ -1,6 +1,8 @@
 import pytest
 import yt_dlp
+from django.utils import timezone
 
+from files.models import Media, MediaIngestionJob
 from files.services.youtube import CaptionTrack, classify_ytdlp_error, discovered_caption_tracks, fetch_caption_text, normalize_youtube_url, choose_caption_tracks
 from files.services.subtitles import (
     SubtitleCue,
@@ -10,6 +12,8 @@ from files.services.subtitles import (
     parse_webvtt,
 )
 from files.services.youtube_cookies import materialize_cookie, store_cookies
+from files.services.youtube_jobs import start_youtube_job
+from tests.users.factories import UserFactory
 
 
 def test_normalize_youtube_url_accepts_single_video_and_rejects_playlist():
@@ -135,3 +139,31 @@ def test_uploading_the_same_cookie_file_is_idempotent():
     assert second.pk == first.pk
     assert second.status == second.Status.ACTIVE
     assert second.__class__.objects.count() == 1
+
+
+@pytest.mark.django_db
+def test_start_youtube_job_releases_metadata_preview_for_import():
+    user = UserFactory(username="youtube-start-owner")
+    media = Media.objects.create(
+        title="Preview",
+        user=user,
+        friendly_token="youtube-start-preview",
+        storage_backend="aws",
+        media_file="aws-source/pending-upload",
+    )
+    job = MediaIngestionJob.objects.create(
+        media=media,
+        media_title_snapshot=media.title,
+        source_type="youtube",
+        status="running",
+        stage="metadata_ready",
+        source_metadata={"url": "https://www.youtube.com/watch?v=abc123", "discovered": {"title": "Preview"}},
+        queued_at=timezone.now(),
+    )
+
+    started = start_youtube_job(job.id)
+
+    assert started.id == job.id
+    started.refresh_from_db()
+    assert started.status == "queued"
+    assert started.source_metadata["import_requested"] is True

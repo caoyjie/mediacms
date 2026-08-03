@@ -149,6 +149,7 @@ urlpatterns = [
     path("api/v1/aws/youtube/jobs/", views.YouTubeJobCreateView.as_view()),
     path("api/v1/aws/youtube/jobs/<uuid:job_id>/", views.YouTubeJobDetailView.as_view()),
     path("api/v1/aws/youtube/jobs/<uuid:job_id>/resume/", views.YouTubeJobResumeView.as_view()),
+    path("api/v1/aws/youtube/jobs/<uuid:job_id>/start/", views.YouTubeJobStartView.as_view()),
     path("api/v1/aws/youtube/cookies/", views.YouTubeCookieUploadView.as_view()),
     path("api/v1/aws/youtube/cookies/status/", views.YouTubeCookieStatusView.as_view()),
     path("api/v1/aws/jobs/", views.AWSJobListView.as_view()),

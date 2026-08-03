@@ -5,7 +5,7 @@ from rest_framework.views import APIView
 
 from files.models import MediaIngestionJob, MediaJobCheckpoint
 from files.services.youtube_cookies import latest_cookie, store_cookies
-from files.services.youtube_jobs import create_youtube_job, resume_youtube_job
+from files.services.youtube_jobs import create_youtube_job, resume_youtube_job, start_youtube_job
 
 
 class YouTubeJobCreateView(APIView):
@@ -65,6 +65,18 @@ class YouTubeJobResumeView(APIView):
         return Response({"job_id": str(job.id), "stage": job.stage, "status": job.status})
 
 
+class YouTubeJobStartView(APIView):
+    permission_classes = (permissions.IsAdminUser,)
+    parser_classes = (JSONParser,)
+
+    def post(self, request, job_id):
+        try:
+            job = start_youtube_job(job_id, subtitle_languages=request.data.get("subtitle_languages"))
+        except ValueError as error:
+            return Response({"detail": str(error)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({"job_id": str(job.id), "stage": job.stage, "status": job.status})
+
+
 class YouTubeJobDetailView(APIView):
     permission_classes = (permissions.IsAdminUser,)
 
@@ -73,6 +85,8 @@ class YouTubeJobDetailView(APIView):
         if job is None:
             return Response({"detail": "YouTube job not found."}, status=status.HTTP_404_NOT_FOUND)
         checkpoint = MediaJobCheckpoint.objects.filter(attempt__job=job, name="metadata").order_by("-created_at").first()
+        subtitle_checkpoint = MediaJobCheckpoint.objects.filter(attempt__job=job, name="subtitles").order_by("-created_at").first()
+        caption_tracks = (checkpoint.evidence or {}).get("caption_tracks", {}) if checkpoint else {}
         return Response({
             "job_id": str(job.id),
             "media_id": str(job.media_id) if job.media_id else None,
@@ -83,4 +97,10 @@ class YouTubeJobDetailView(APIView):
             "title": job.media.title if job.media else job.media_title_snapshot,
             "metadata": (job.source_metadata or {}).get("discovered") or (checkpoint.evidence if checkpoint else None),
             "metadata_checkpoint": checkpoint.status if checkpoint else "pending",
+            "subtitle_status": subtitle_checkpoint.status if subtitle_checkpoint else "pending",
+            "subtitle_options": [
+                {"language": language, "kind": track.get("kind", "manual")}
+                for language, track in caption_tracks.items()
+            ],
+            "import_requested": bool((job.source_metadata or {}).get("import_requested")),
         })

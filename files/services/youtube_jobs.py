@@ -65,3 +65,21 @@ def resume_youtube_job(job_id, *, cookie_version_id=None):
             encoding_status=encoding_status_for(MediaProcessingStatus.QUEUED),
         )
     return job
+
+
+@transaction.atomic
+def start_youtube_job(job_id, *, subtitle_languages=None):
+    """Release a metadata preview into the single import queue."""
+    job = MediaIngestionJob.objects.select_for_update().get(pk=job_id)
+    if job.source_type != JobSourceType.YOUTUBE or job.stage != "metadata_ready":
+        raise ValueError("YouTube metadata is not ready to import")
+    metadata = dict(job.source_metadata or {})
+    metadata["import_requested"] = True
+    if subtitle_languages is not None:
+        metadata["selected_subtitle_languages"] = sorted({str(value) for value in subtitle_languages})
+    job.source_metadata = metadata
+    job.status = JobStatus.QUEUED
+    job.cancel_requested = False
+    job.queued_at = timezone.now()
+    job.save(update_fields=("source_metadata", "status", "cancel_requested", "queued_at", "updated_at"))
+    return job

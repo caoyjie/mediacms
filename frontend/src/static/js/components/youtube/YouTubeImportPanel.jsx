@@ -14,7 +14,14 @@ export default function YouTubeImportPanel() {
     const [message, setMessage] = useState('');
     const [cookieStatus, setCookieStatus] = useState(null);
     const [cookieVersionId, setCookieVersionId] = useState(null);
+    const [selectedSubtitles, setSelectedSubtitles] = useState([]);
     const { job, error } = useYouTubeJob(jobId);
+
+    useEffect(() => {
+        if (job && Array.isArray(job.subtitle_options) && !selectedSubtitles.length) {
+            setSelectedSubtitles(job.subtitle_options.map((option) => option.language));
+        }
+    }, [job, selectedSubtitles.length]);
 
     useEffect(() => {
         fetch('/api/v1/aws/youtube/cookies/status/', { credentials: 'same-origin' })
@@ -66,6 +73,19 @@ export default function YouTubeImportPanel() {
         setMessage(response.ok ? 'Job resumed.' : (data.detail || 'Unable to resume job.'));
     }
 
+    async function startImport() {
+        const response = await fetch(`/api/v1/aws/youtube/jobs/${jobId}/start/`, {
+            method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken() },
+            body: JSON.stringify({ subtitle_languages: selectedSubtitles }),
+        });
+        const data = await response.json();
+        setMessage(response.ok ? 'Import started.' : (data.detail || 'Unable to start import.'));
+    }
+
+    function toggleSubtitle(language) {
+        setSelectedSubtitles((current) => current.includes(language) ? current.filter((item) => item !== language) : [...current, language]);
+    }
+
     return (
         <section className="youtube-import-panel" aria-label="YouTube video import">
             <h2>YouTube video</h2>
@@ -84,7 +104,8 @@ export default function YouTubeImportPanel() {
             </div>
             {message ? <p role="status">{message}</p> : null}
             {error ? <p role="alert">{error.message}</p> : null}
-            {job ? <YouTubeMetadataCard metadata={job.metadata} title={job.title} onTitleChange={setTitle} disabled={job.status === 'completed'} /> : null}
+            {job ? <YouTubeMetadataCard metadata={job.metadata} title={job.title} onTitleChange={setTitle} subtitleOptions={job.subtitle_options} selectedSubtitles={selectedSubtitles} onSubtitleChange={toggleSubtitle} disabled={job.status === 'completed'} /> : null}
+            {job && job.stage === 'metadata_ready' && !job.import_requested ? <button type="button" onClick={startImport}>Start import</button> : null}
             {job && job.stage === 'action_required' && /cookie/i.test(job.safe_error || '') ? <button type="button" onClick={resume}>Resume with cookies</button> : null}
         </section>
     );
