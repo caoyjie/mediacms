@@ -43,3 +43,4 @@ templates/todo-MS4.md
 .venv/
 __pycache__/
 *.py[cod]
+.env.dev
