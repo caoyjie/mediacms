@@ -45,3 +45,27 @@ def test_playback_progress_rejects_anonymous_requests(playback_media):
     response = APIClient().get(f"/api/v1/media/{media.pk}/playback-progress/")
 
     assert response.status_code in (401, 403)
+
+
+@pytest.mark.django_db
+def test_playback_progress_rejects_asset_version_from_another_media(playback_media):
+    media, _ = playback_media
+    other_media = Media.objects.create(
+        title="Other media",
+        user=UserFactory(username=f"other-{uuid.uuid4()}"),
+        friendly_token=f"other-{uuid.uuid4()}",
+        storage_backend="aws",
+        media_file="originals/other/source.mp4",
+    )
+    other_version = MediaAssetVersion.objects.create(media=other_media, manifest_key="other/master.m3u8")
+    user = UserFactory(username=f"viewer-{uuid.uuid4()}")
+    client = APIClient()
+    client.force_authenticate(user=user)
+
+    response = client.put(
+        f"/api/v1/media/{media.pk}/playback-progress/",
+        {"position_seconds": 10, "duration_seconds": 120, "asset_version_id": str(other_version.pk)},
+        format="json",
+    )
+
+    assert response.status_code == 400
