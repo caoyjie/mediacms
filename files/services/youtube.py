@@ -78,7 +78,7 @@ def classify_ytdlp_error(message):
         return "cookies"
     if any(term in lowered for term in ("no subtitles", "there are no subtitles", "subtitles are not available")):
         return "unavailable"
-    if any(term in lowered for term in ("429", "timed out", "temporarily", "connection reset")):
+    if any(term in lowered for term in ("429", "timed out", "temporarily", "connection reset", "javascript challenge", "n challenge", "only images are available", "ejs")):
         return "retryable"
     return "unknown"
 
@@ -89,8 +89,10 @@ def extract_info(url, *, cookie_file=None):
         "quiet": True,
         "skip_download": True,
         "noplaylist": True,
-        "remote_components": ["ejs:github"],
     }
+    remote_components = getattr(settings, "YTDLP_REMOTE_COMPONENTS", ())
+    if remote_components:
+        options["remote_components"] = list(remote_components)
     if cookie_file:
         options["cookiefile"] = str(cookie_file)
     with yt_dlp.YoutubeDL(options) as downloader:
@@ -109,8 +111,10 @@ def download_source(url, output_dir, *, cookie_file=None):
         "format": "bestvideo*+bestaudio/best",
         "outtmpl": str(target),
         "merge_output_format": "mp4",
-        "remote_components": ["ejs:github"],
     }
+    remote_components = getattr(settings, "YTDLP_REMOTE_COMPONENTS", ())
+    if remote_components:
+        options["remote_components"] = list(remote_components)
     if cookie_file:
         options["cookiefile"] = str(cookie_file)
     try:

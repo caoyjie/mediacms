@@ -229,6 +229,9 @@ AWS_CLOUDFRONT_KEY_PAIR_ID = os.environ.get("AWS_CLOUDFRONT_KEY_PAIR_ID", "")
 AWS_CLOUDFRONT_PRIVATE_KEY = os.environ.get("AWS_CLOUDFRONT_PRIVATE_KEY", "")
 AWS_CLOUDFRONT_COOKIE_DOMAIN = os.environ.get("AWS_CLOUDFRONT_COOKIE_DOMAIN", "")
 AWS_CLOUDFRONT_COOKIE_TTL_SECONDS = int(os.environ.get("AWS_CLOUDFRONT_COOKIE_TTL_SECONDS", "3600"))
+YTDLP_REMOTE_COMPONENTS = tuple(
+    item.strip() for item in os.environ.get("YTDLP_REMOTE_COMPONENTS", "").split(",") if item.strip()
+)
 
 # these used to be os.path.join(MEDIA_ROOT, "folder/") but update to
 # Django 3.1.9 requires not absolute paths to be utilized...

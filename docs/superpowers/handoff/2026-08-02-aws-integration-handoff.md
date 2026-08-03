@@ -321,7 +321,51 @@ Required manual information/configuration:
 
 Until this information is available, use the default CloudFront distribution hostname for API and browser contract tests.
 
-## 12. Handoff checklist
+## 12. Production YouTube JavaScript Challenge requirements
+
+YouTube downloading requires both a supported JavaScript runtime and the matching `yt-dlp-ejs` challenge solver. Cookie files solve authentication, age and regional access; they do not solve JavaScript challenges. The authoritative runtime guidance is maintained at `https://github.com/yt-dlp/yt-dlp/wiki/EJS`.
+
+Install a pinned yt-dlp release with its matching EJS package:
+
+```bash
+uv pip install --python .venv/bin/python 'yt-dlp[default]==<pinned-version>'
+```
+
+Install Deno in the production worker image or host. Current official guidance requires Deno 2.3.0 or newer:
+
+```bash
+curl -fsSL https://deno.land/install.sh | sh
+deno --version
+.venv/bin/yt-dlp --version
+```
+
+The Celery worker service must have the same Deno path as the interactive shell. Record yt-dlp, yt-dlp-ejs and Deno versions in the release manifest.
+
+Run a metadata-only challenge health check before enabling YouTube jobs:
+
+```bash
+.venv/bin/yt-dlp \
+  --no-playlist --skip-download --dump-single-json \
+  --js-runtimes deno \
+  --cookies /secure/ytb_cookies.txt \
+  'https://www.youtube.com/watch?v=<fixture-id>' \
+  >/tmp/youtube-check.json
+```
+
+The check passes only when the JSON contains a title, video ID and at least one usable audio/video format. “Only images are available” means the EJS/runtime setup is broken even if metadata was returned.
+
+Production should use the bundled `yt-dlp-ejs` package and keep `YTDLP_REMOTE_COMPONENTS` empty. Configure `YTDLP_REMOTE_COMPONENTS=ejs:github` or `ejs:npm` only when the production network policy explicitly permits runtime component downloads and that fallback has been tested. Remote downloads must not be the only recovery path.
+
+Operational requirements:
+
+- Pause YouTube jobs if the challenge health check fails; local upload and existing playback remain available.
+- Treat JavaScript challenge/EJS errors as retryable infrastructure failures, not Cookie failures.
+- Treat invalid/expired Cookies as actionable `cookies` failures and support Resume after a new encrypted upload.
+- Never log Cookie values, challenge URLs, signed URLs or complete yt-dlp commands.
+- Rerun the health check after every yt-dlp, yt-dlp-ejs, Deno or base-image upgrade.
+- Do not bypass the challenge with browser automation or disabled TLS verification.
+
+## 13. Handoff checklist
 
 The next developer/operator should:
 
@@ -336,7 +380,7 @@ The next developer/operator should:
 9. Record all AWS Job IDs, template versions, asset version IDs and cleanup evidence.
 10. Obtain explicit approval before deleting old AWS resources, old containers, old media or any production data.
 
-## 13. Safety rules
+## 14. Safety rules
 
 - Never log Cookie contents, CloudFront private keys, presigned URLs or complete YouTube command lines.
 - Never bypass CloudFormation for AWS resource creation or deletion.
