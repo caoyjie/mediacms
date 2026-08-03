@@ -15,7 +15,8 @@ from django.utils import timezone
 from files.models import AttemptArtifact, MediaJobCheckpoint, MediaIngestionJob
 from files.models.ingestion import ArtifactCleanupStatus, ArtifactPurpose, CheckpointStatus
 from files.services.processing_storage import ObjectEvidence
-from files.services.youtube import extract_info, download_source
+from files.services.youtube import CaptionTrack, choose_caption_tracks, extract_info, download_source, fetch_caption_text
+from files.services.subtitles import build_bilingual_webvtt, normalize_webvtt, parse_webvtt
 from files.services.youtube_cookies import materialize_cookie
 from files.services.youtube_cookies import latest_cookie
 
@@ -82,6 +83,51 @@ def subtitle_checkpoint(attempt, *, status, evidence=None, now=None):
     )[0]
 
 
+def upload_subtitle_tracks(attempt, *, client=None):
+    checkpoint = MediaJobCheckpoint.objects.filter(
+        attempt=attempt,
+        name="subtitles",
+        status=CheckpointStatus.AVAILABLE,
+    ).first()
+    if checkpoint is None:
+        return 0
+    if client is None:
+        import boto3
+        client = boto3.client("s3", region_name=settings.AWS_REGION)
+    count = 0
+    prefix = f"candidates/{attempt.job.media_id}/{attempt.id}/subtitles/"
+    for language, text in (checkpoint.evidence.get("tracks") or {}).items():
+        payload = text.encode("utf-8")
+        key = f"{prefix}{language}.vtt"
+        existing = AttemptArtifact.objects.filter(attempt=attempt, s3_key=key, purpose=ArtifactPurpose.CANDIDATE).first()
+        if existing is not None and existing.size_bytes == len(payload) and existing.checksum == f"sha256:{hashlib.sha256(payload).hexdigest()}":
+            continue
+        client.put_object(
+            Bucket=settings.AWS_MEDIA_BUCKET,
+            Key=key,
+            Body=payload,
+            ContentType="text/vtt; charset=utf-8",
+            ChecksumAlgorithm="SHA256",
+        )
+        evidence = client.head_object(Bucket=settings.AWS_MEDIA_BUCKET, Key=key)
+        if int(evidence.get("ContentLength", -1)) != len(payload):
+            raise ValueError("uploaded subtitle size verification failed")
+        checksum = hashlib.sha256(payload).hexdigest()
+        AttemptArtifact.objects.update_or_create(
+            attempt=attempt,
+            s3_key=key,
+            defaults={
+                "purpose": ArtifactPurpose.CANDIDATE,
+                "size_bytes": len(payload),
+                "content_type": "text/vtt",
+                "checksum": f"sha256:{checksum}",
+                "cleanup_status": ArtifactCleanupStatus.PENDING,
+            },
+        )
+        count += 1
+    return count
+
+
 def run_youtube_step(attempt, *, now=None):
     """Run one bounded YouTube checkpoint operation for the global queue."""
     now = now or timezone.now()
@@ -109,7 +155,18 @@ def run_youtube_step(attempt, *, now=None):
             return "failed"
         MediaJobCheckpoint.objects.create(
             attempt=attempt, name="metadata", status="completed",
-            evidence={"video_id": metadata.video_id, "title": metadata.title, "duration": metadata.duration, "thumbnail": metadata.thumbnail},
+            evidence={
+                "video_id": metadata.video_id,
+                "title": metadata.title,
+                "duration": metadata.duration,
+                "thumbnail": metadata.thumbnail,
+                "caption_tracks": {
+                    language: {"url": track.url, "kind": track.kind}
+                    for language, track in choose_caption_tracks(
+                        {**(info.get("subtitles") or {}), **(info.get("automatic_captions") or {})}
+                    ).items()
+                },
+            },
             completed_at=now,
         )
         if attempt.job.media and not (attempt.job.media.metadata_sources or {}).get("title"):
@@ -125,6 +182,25 @@ def run_youtube_step(attempt, *, now=None):
         return "download"
     subtitle = MediaJobCheckpoint.objects.filter(attempt=attempt, name="subtitles").first()
     if subtitle is None:
-        subtitle_checkpoint(attempt, status=CheckpointStatus.UNAVAILABLE, evidence={"reason": "subtitle fetch is optional"}, now=now)
+        tracks = {}
+        for language, item in (metadata_checkpoint.evidence.get("caption_tracks") or {}).items():
+            tracks[language] = CaptionTrack(item["url"], language, item.get("kind", "manual"))
+        if not tracks:
+            subtitle_checkpoint(attempt, status=CheckpointStatus.UNAVAILABLE, evidence={"reason": "no subtitles were offered"}, now=now)
+            return "subtitles"
+        try:
+            sources = {language: normalize_webvtt(fetch_caption_text(track)) for language, track in tracks.items()}
+            published = {language: text for language, text in sources.items()}
+            if "zh" in sources and "en" in sources:
+                published["bilingual"] = build_bilingual_webvtt(parse_webvtt(sources["zh"]), parse_webvtt(sources["en"]))
+            subtitle_checkpoint(
+                attempt,
+                status=CheckpointStatus.AVAILABLE,
+                evidence={"tracks": published, "languages": sorted(published)},
+                now=now,
+            )
+        except (OSError, UnicodeError, ValueError):
+            subtitle_checkpoint(attempt, status=CheckpointStatus.FAILED_RETRYABLE, evidence={"reason": "subtitle fetch or parsing failed"}, now=now)
         return "subtitles"
+    upload_subtitle_tracks(attempt)
     return "ready"

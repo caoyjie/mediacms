@@ -6,7 +6,7 @@ from django.utils import timezone
 
 from files.models import MediaIngestionJob, MediaJobAttempt, MediaJobCheckpoint
 from files.models.ingestion import AttemptStatus, CheckpointStatus, CleanupStatus, JobStatus
-from files.services.asset_publishing import publish_candidate, register_candidate
+from files.services.asset_publishing import attach_subtitle_assets, publish_candidate, register_candidate
 from files.services.mediaconvert import MediaConvertGateway
 from files.services.media_probe import SourceFacts, probe_source
 from files.services.processing_cancellation import (
@@ -150,6 +150,7 @@ def _run_action(attempt, media_gateway, storage_gateway, now):
         snapshot = media_gateway.get_job(attempt.mediaconvert_job_id)
         verified = verify_mediaconvert_outputs(attempt.id, snapshot, storage_gateway)
         register_candidate(attempt.id, verified)
+        attach_subtitle_assets(attempt.id)
         return "verify_outputs", False
 
     if not job.media or not job.media.active_asset_version_id:

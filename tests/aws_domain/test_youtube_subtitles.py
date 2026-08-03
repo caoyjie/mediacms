@@ -1,6 +1,6 @@
 import pytest
 
-from files.services.youtube import classify_ytdlp_error, normalize_youtube_url, choose_caption_tracks
+from files.services.youtube import CaptionTrack, classify_ytdlp_error, fetch_caption_text, normalize_youtube_url, choose_caption_tracks
 from files.services.subtitles import (
     SubtitleCue,
     build_bilingual_webvtt,
@@ -44,6 +44,28 @@ def test_subtitle_failure_classification_is_safe():
     assert classify_ytdlp_error("HTTP Error 429: Too Many Requests") == "retryable"
     assert classify_ytdlp_error("no subtitles available") == "unavailable"
     assert classify_ytdlp_error("some unknown failure") == "unknown"
+
+
+def test_caption_fetch_uses_utf8_and_rejects_oversized_payload():
+    class Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def read(self, limit):
+            assert limit == 4 * 1024 * 1024 + 1
+            return b"WEBVTT\n"
+
+    captured = []
+
+    def opener(request, timeout):
+        captured.append((request.full_url, timeout))
+        return Response()
+
+    assert fetch_caption_text(CaptionTrack("https://example.test/caption", "en", "manual"), opener=opener) == "WEBVTT\n"
+    assert captured == [("https://example.test/caption", 30)]
 
 
 @pytest.mark.django_db

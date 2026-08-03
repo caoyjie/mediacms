@@ -176,6 +176,49 @@ def register_candidate(attempt_id, outputs):
         return version
 
 
+def attach_subtitle_assets(attempt_id):
+    """Add verified YouTube subtitle objects to an existing candidate version."""
+    with transaction.atomic():
+        attempt, job, media = _locked_attempt(attempt_id)
+        version = MediaAssetVersion.objects.select_for_update().filter(attempt=attempt).first()
+        checkpoint = MediaJobCheckpoint.objects.filter(
+            attempt=attempt,
+            name="subtitles",
+            status=CheckpointStatus.AVAILABLE,
+        ).first()
+        if version is None or checkpoint is None:
+            return 0
+        prefix = _candidate_prefix(attempt) + "subtitles/"
+        added = 0
+        for language in checkpoint.evidence.get("languages", []):
+            key = f"{prefix}{language}.vtt"
+            artifact = AttemptArtifact.objects.filter(
+                attempt=attempt,
+                purpose=ArtifactPurpose.CANDIDATE,
+                s3_key=key,
+            ).first()
+            if artifact is None:
+                raise CandidateConflict("Subtitle object has no candidate artifact ledger entry.")
+            _, created = MediaAsset.objects.get_or_create(
+                version=version,
+                s3_key=key,
+                defaults={
+                    "kind": MediaAsset.Kind.SUBTITLE,
+                    "checksum": artifact.checksum,
+                    "size_bytes": artifact.size_bytes,
+                    "content_type": artifact.content_type,
+                },
+            )
+            added += int(created)
+        if added:
+            evidence = dict(MediaJobCheckpoint.objects.get(attempt=attempt, name="outputs_verified").evidence)
+            for asset in version.assets.filter(kind=MediaAsset.Kind.SUBTITLE):
+                if not any(item.get("key") == asset.s3_key for item in evidence.get("outputs", [])):
+                    evidence.setdefault("outputs", []).append({"kind": asset.kind, "key": asset.s3_key, "size": asset.size_bytes, "content_type": asset.content_type, "checksum": asset.checksum})
+            MediaJobCheckpoint.objects.filter(attempt=attempt, name="outputs_verified").update(evidence=evidence)
+        return added
+
+
 def publish_candidate(attempt_id):
     with transaction.atomic():
         attempt, job, media = _locked_attempt(attempt_id)

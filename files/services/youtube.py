@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 from pathlib import Path
 import re
+from urllib.request import Request, urlopen
 from urllib.parse import parse_qs, urlparse
 
 
@@ -42,6 +43,17 @@ def choose_caption_tracks(raw):
         candidates.sort(key=lambda track: (track.kind != "manual", track.url))
         return candidates[0] if candidates else None
     return {language: track for language in ("zh", "en") if (track := choose(language))}
+
+
+def fetch_caption_text(track, *, opener=urlopen):
+    if not isinstance(track, CaptionTrack) or not track.url.startswith(("https://", "http://")):
+        raise ValueError("caption URL is invalid")
+    request = Request(track.url, headers={"User-Agent": "MediaCMS/1.0"})
+    with opener(request, timeout=30) as response:
+        payload = response.read(4 * 1024 * 1024 + 1)
+    if len(payload) > 4 * 1024 * 1024:
+        raise ValueError("caption file is too large")
+    return payload.decode("utf-8-sig")
 
 
 def classify_ytdlp_error(message):
