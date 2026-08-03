@@ -62,6 +62,20 @@ def test_empty_queue_returns_no_acquisition():
 
 
 @pytest.mark.django_db(transaction=True)
+def test_metadata_only_youtube_job_does_not_enter_import_queue():
+    media = create_aws_media("Metadata only")
+    MediaIngestionJob.objects.create(
+        media=media,
+        media_title_snapshot=media.title,
+        source_type="youtube",
+        status="queued",
+        source_metadata={"url": "https://www.youtube.com/watch?v=abc123"},
+    )
+
+    assert acquire_head_job("worker-a", lease_seconds=60) is None
+
+
+@pytest.mark.django_db(transaction=True)
 def test_live_lease_blocks_second_owner():
     now = timezone.now()
     create_job("First", queued_at=now)

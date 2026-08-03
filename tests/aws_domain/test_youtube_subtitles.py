@@ -2,7 +2,7 @@ import pytest
 import yt_dlp
 from django.utils import timezone
 
-from files.models import Media, MediaIngestionJob
+from files.models import Media, MediaIngestionJob, MediaJobCheckpoint
 from files.services.youtube import CaptionTrack, classify_ytdlp_error, discovered_caption_tracks, fetch_caption_text, normalize_youtube_url, choose_caption_tracks
 from files.services.subtitles import (
     SubtitleCue,
@@ -13,6 +13,7 @@ from files.services.subtitles import (
 )
 from files.services.youtube_cookies import materialize_cookie, store_cookies
 from files.services.youtube_jobs import start_youtube_job
+from files.processing_tasks import discover_youtube_metadata
 from tests.users.factories import UserFactory
 
 
@@ -167,3 +168,39 @@ def test_start_youtube_job_releases_metadata_preview_for_import():
     started.refresh_from_db()
     assert started.status == "queued"
     assert started.source_metadata["import_requested"] is True
+
+
+@pytest.mark.django_db
+def test_metadata_task_persists_preview_without_import_side_effects(monkeypatch):
+    user = UserFactory(username="youtube-metadata-owner")
+    media = Media.objects.create(
+        title="Preview",
+        user=user,
+        friendly_token="youtube-metadata-preview",
+        storage_backend="aws",
+        media_file="aws-source/pending-upload",
+    )
+    job = MediaIngestionJob.objects.create(
+        media=media,
+        media_title_snapshot=media.title,
+        source_type="youtube",
+        source_metadata={"url": "https://www.youtube.com/watch?v=abc123"},
+        status="queued",
+        stage="metadata_pending",
+        queued_at=timezone.now(),
+    )
+
+    from files.services.youtube_import import YouTubeMetadata
+
+    monkeypatch.setattr(
+        "files.processing_tasks.discover",
+        lambda url: (YouTubeMetadata("abc123", "Found", "Description", 42, "https://img.example/poster.jpg"), {"subtitles": {"en": [{"url": "https://caption.example/en", "kind": "manual"}]}}),
+    )
+
+    result = discover_youtube_metadata.run(str(job.id))
+
+    job.refresh_from_db()
+    assert result["stage"] == "metadata_ready"
+    assert job.stage == "metadata_ready"
+    assert job.source_metadata["discovered"]["title"] == "Found"
+    assert MediaJobCheckpoint.objects.filter(attempt__job=job, name="metadata").count() == 1

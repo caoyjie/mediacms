@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 from uuid import UUID
 
 from django.db import transaction
-from django.db.models import Max
+from django.db.models import Max, Q
 from django.utils import timezone
 
 from files.models import Media, MediaIngestionJob, MediaJobAttempt, ProcessingLease
@@ -90,7 +90,15 @@ def acquire_head_job(
             return _transfer_expired_lease(lease, owner_token, lease_seconds, current_time)
         _clear_lease(lease)
 
-    job = MediaIngestionJob.objects.select_for_update().queued().first()
+    job = (
+        MediaIngestionJob.objects.select_for_update()
+        .queued()
+        .filter(
+            Q(source_type__in=("upload", "hls_zip"))
+            | Q(source_type="youtube", source_metadata__import_requested=True)
+        )
+        .first()
+    )
     if job is None:
         return None
     attempt = (

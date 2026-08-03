@@ -6,6 +6,7 @@ from rest_framework.views import APIView
 from files.models import MediaIngestionJob, MediaJobCheckpoint
 from files.services.youtube_cookies import latest_cookie, store_cookies
 from files.services.youtube_jobs import create_youtube_job, resume_youtube_job, start_youtube_job
+from files.processing_tasks import discover_youtube_metadata
 
 
 class YouTubeJobCreateView(APIView):
@@ -22,6 +23,7 @@ class YouTubeJobCreateView(APIView):
             )
         except ValueError as error:
             return Response({"detail": str(error)}, status=status.HTTP_400_BAD_REQUEST)
+        discover_youtube_metadata.apply_async(args=(str(job.id),), queue="youtube_metadata")
         return Response({"job_id": str(job.id), "media_id": str(job.media_id), "stage": job.stage}, status=status.HTTP_201_CREATED)
 
 

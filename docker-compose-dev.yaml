@@ -12,6 +12,9 @@ services:
     volumes:
       - ./:/home/mediacms.io/mediacms/
     command: "./deploy/docker/prestart.sh"
+    env_file:
+      - path: ${PWD}/.env.aws-test
+        required: false
     environment:
       DEVELOPMENT_MODE: True
       ENABLE_UWSGI: 'no'
@@ -43,6 +46,9 @@ services:
   web:
     image: mediacms/mediacms-dev:latest
     command: "python manage.py runserver 0.0.0.0:80"
+    env_file:
+      - path: ${PWD}/.env.aws-test
+        required: false
     environment:
       DEVELOPMENT_MODE: True
     ports:
@@ -78,8 +84,12 @@ services:
     image: mediacms/mediacms-dev:latest
     deploy:
       replicas: 1
+    command: "celery -A cms worker --loglevel=INFO --queues=celery --concurrency=1"
     volumes:
       - ./:/home/mediacms.io/mediacms/
+    env_file:
+      - path: ${PWD}/.env.aws-test
+        required: false
     environment:
       ENABLE_UWSGI: 'no'
       ENABLE_NGINX: 'no'
@@ -87,3 +97,36 @@ services:
       ENABLE_MIGRATIONS: 'no'
     depends_on:
       - web
+  celery_metadata:
+    image: mediacms/mediacms-dev:latest
+    deploy:
+      replicas: 1
+    command: "celery -A cms worker --loglevel=INFO --queues=youtube_metadata --concurrency=2"
+    volumes:
+      - ./:/home/mediacms.io/mediacms/
+    env_file:
+      - path: ${PWD}/.env.aws-test
+        required: false
+    environment:
+      ENABLE_UWSGI: 'no'
+      ENABLE_NGINX: 'no'
+      ENABLE_CELERY_BEAT: 'no'
+      ENABLE_MIGRATIONS: 'no'
+    depends_on:
+      - web
+  celery_beat:
+    image: mediacms/mediacms-dev:latest
+    command: "celery -A cms beat --loglevel=INFO"
+    volumes:
+      - ./:/home/mediacms.io/mediacms/
+    env_file:
+      - path: ${PWD}/.env.aws-test
+        required: false
+    environment:
+      ENABLE_UWSGI: 'no'
+      ENABLE_NGINX: 'no'
+      ENABLE_CELERY_SHORT: 'no'
+      ENABLE_CELERY_LONG: 'no'
+      ENABLE_MIGRATIONS: 'no'
+    depends_on:
+      - redis
