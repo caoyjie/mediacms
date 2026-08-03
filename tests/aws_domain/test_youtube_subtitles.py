@@ -123,3 +123,15 @@ def test_cookies_are_encrypted_and_materialized_as_0600_then_removed(tmp_path):
         assert path.stat().st_mode & 0o777 == 0o600
         materialized = path
     assert not materialized.exists()
+
+
+@pytest.mark.django_db
+def test_uploading_the_same_cookie_file_is_idempotent():
+    payload = b"# Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/\tTRUE\t0\tSID\tsecret\n"
+
+    first = store_cookies(payload)
+    second = store_cookies(payload)
+
+    assert second.pk == first.pk
+    assert second.status == second.Status.ACTIVE
+    assert second.__class__.objects.count() == 1

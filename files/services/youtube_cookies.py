@@ -9,6 +9,7 @@ from pathlib import Path
 
 from cryptography.fernet import Fernet
 from django.conf import settings
+from django.db import transaction
 from django.utils import timezone
 
 from files.models import YouTubeCookieVersion
@@ -37,15 +38,25 @@ def validate_netscape_cookies(payload):
 def store_cookies(payload):
     payload = validate_netscape_cookies(payload)
     checksum = hashlib.sha256(payload).hexdigest()
-    encrypted = _fernet().encrypt(payload)
-    YouTubeCookieVersion.objects.filter(status=YouTubeCookieVersion.Status.ACTIVE).update(
-        status=YouTubeCookieVersion.Status.RETIRED
-    )
-    return YouTubeCookieVersion.objects.create(
-        encrypted_payload=encrypted,
-        checksum=checksum,
-        status=YouTubeCookieVersion.Status.ACTIVE,
-    )
+    with transaction.atomic():
+        version = (
+            YouTubeCookieVersion.objects.select_for_update()
+            .filter(checksum=checksum)
+            .first()
+        )
+        if version is None:
+            version = YouTubeCookieVersion.objects.create(
+                encrypted_payload=_fernet().encrypt(payload),
+                checksum=checksum,
+                status=YouTubeCookieVersion.Status.ACTIVE,
+            )
+        else:
+            version.status = YouTubeCookieVersion.Status.ACTIVE
+            version.save(update_fields=("status",))
+        YouTubeCookieVersion.objects.filter(
+            status=YouTubeCookieVersion.Status.ACTIVE
+        ).exclude(pk=version.pk).update(status=YouTubeCookieVersion.Status.RETIRED)
+        return version
 
 
 def latest_cookie():
