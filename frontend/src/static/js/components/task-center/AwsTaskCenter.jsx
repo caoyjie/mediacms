@@ -7,7 +7,7 @@ function statusLabel(job) {
 }
 
 export default function AwsTaskCenter() {
-    const { jobs, error, refresh } = useAwsJobs();
+    const { jobs, error, nextOffset, loadMore, refresh } = useAwsJobs();
     const [sourceFilter, setSourceFilter] = useState('all');
     const [statusFilter, setStatusFilter] = useState('all');
     const [expanded, setExpanded] = useState(null);
@@ -53,6 +53,7 @@ export default function AwsTaskCenter() {
                     {expanded === job.job_id ? <ol aria-label="Checkpoint timeline">{(job.checkpoints || []).map((checkpoint) => <li key={`${checkpoint.name}-${checkpoint.completed_at || 'pending'}`}><span>{checkpoint.name}</span><span>{checkpoint.status}</span></li>)}</ol> : null}
                 </li>)}
             </ul>
+            {nextOffset !== null ? <button type="button" onClick={loadMore}>Load more history</button> : null}
         </section>
     );
 }

@@ -39,8 +39,15 @@ class AWSJobListView(APIView):
             limit = min(max(int(request.query_params.get("limit", 50)), 1), 100)
         except (TypeError, ValueError):
             limit = 50
-        jobs = MediaIngestionJob.objects.select_related("media").prefetch_related("attempts__checkpoints").order_by("-updated_at")[:limit]
-        return Response({"results": [_job_payload(job) for job in jobs]})
+        try:
+            offset = max(int(request.query_params.get("offset", 0)), 0)
+        except (TypeError, ValueError):
+            offset = 0
+        queryset = MediaIngestionJob.objects.select_related("media").prefetch_related("attempts__checkpoints").order_by("-updated_at")
+        total = queryset.count()
+        jobs = queryset[offset:offset + limit]
+        next_offset = offset + len(jobs) if offset + len(jobs) < total else None
+        return Response({"results": [_job_payload(job) for job in jobs], "total": total, "next_offset": next_offset})
 
 
 class AWSJobDetailView(APIView):

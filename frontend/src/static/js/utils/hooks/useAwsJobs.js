@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 
 export function useAwsJobs({ enabled = true, interval = 5000 } = {}) {
     const [jobs, setJobs] = useState([]);
+    const [nextOffset, setNextOffset] = useState(null);
     const [error, setError] = useState(null);
     const [refreshKey, setRefreshKey] = useState(0);
     useEffect(() => {
@@ -15,6 +16,7 @@ export function useAwsJobs({ enabled = true, interval = 5000 } = {}) {
                 const data = await response.json();
                 if (active) {
                     setJobs(data.results || []);
+                    setNextOffset(data.next_offset);
                     setError(null);
                 }
             } catch (caught) {
@@ -29,5 +31,13 @@ export function useAwsJobs({ enabled = true, interval = 5000 } = {}) {
             if (timer) window.clearTimeout(timer);
         };
     }, [enabled, interval, refreshKey]);
-    return { jobs, error, refresh: () => setRefreshKey((value) => value + 1) };
+    async function loadMore() {
+        if (nextOffset === null) return;
+        const response = await fetch(`/api/v1/aws/jobs/?limit=50&offset=${nextOffset}`, { credentials: 'same-origin' });
+        if (!response.ok) return;
+        const data = await response.json();
+        setJobs((current) => [...current, ...(data.results || [])]);
+        setNextOffset(data.next_offset);
+    }
+    return { jobs, error, nextOffset, loadMore, refresh: () => setRefreshKey((value) => value + 1) };
 }
