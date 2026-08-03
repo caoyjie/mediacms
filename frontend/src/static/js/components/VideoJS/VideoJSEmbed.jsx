@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react';
+import { usePlaybackProgress } from '../../utils/hooks/usePlaybackProgress';
 
 /**
  * VideoJSEmbed - A React component that embeds the MediaCMS video js
@@ -46,11 +47,37 @@ const VideoJSEmbed = ({
     onClickPreviousCallback,
     onStateUpdateCallback,
     onPlayerInitCallback,
+    mediaId,
+    assetVersionId,
 }) => {
     const containerRef = useRef(null);
     const assetsLoadedRef = useRef(false);
     const playerInstanceRef = useRef(null);
+    const restoredProgressRef = useRef(false);
     const inEmbedRef = useRef(inEmbed);
+    const { progress, save: savePlaybackProgress } = usePlaybackProgress(mediaId, assetVersionId);
+
+    const getVideoJsPlayer = (instance) => (instance && instance.player) || instance;
+    const restorePlaybackPosition = (player) => {
+        if (restoredProgressRef.current || !progress || !player || progress.completed) return;
+        if (progress.asset_version_id && assetVersionId && String(progress.asset_version_id) !== String(assetVersionId)) {
+            restoredProgressRef.current = true;
+            return;
+        }
+        const position = Number(progress.position_seconds || 0);
+        const duration = Number(player.duration && player.duration());
+        if (position > 3 && Number.isFinite(position) && (!duration || position < duration - 5)) player.currentTime(position);
+        restoredProgressRef.current = true;
+    };
+
+    useEffect(() => {
+        const player = getVideoJsPlayer(playerInstanceRef.current);
+        if (player) restorePlaybackPosition(player);
+    }, [progress, assetVersionId]);
+
+    useEffect(() => () => {
+        restoredProgressRef.current = false;
+    }, [mediaId, assetVersionId]);
 
     // Helper function to get URL parameters
     const getUrlParameter = (name) => {
@@ -112,6 +139,30 @@ const VideoJSEmbed = ({
                 onPlayerInitCallback: (instance, elem) => {
                     // Store the player instance for timestamp functionality
                     playerInstanceRef.current = instance;
+                    const player = getVideoJsPlayer(instance);
+                    if (player && typeof player.on === 'function') {
+                        const onLoadedMetadata = () => restorePlaybackPosition(player);
+                        const onTimeUpdate = () => {
+                            const position = Number(player.currentTime && player.currentTime());
+                            const duration = Number(player.duration && player.duration());
+                            if (Number.isFinite(position) && Number.isFinite(duration) && duration > 0) {
+                                savePlaybackProgress(position, duration, false);
+                            }
+                        };
+                        const onEnded = () => {
+                            const duration = Number(player.duration && player.duration());
+                            if (Number.isFinite(duration) && duration > 0) savePlaybackProgress(duration, duration, true);
+                        };
+                        player.on('loadedmetadata', onLoadedMetadata);
+                        player.on('timeupdate', onTimeUpdate);
+                        player.on('ended', onEnded);
+                        if (typeof player.one === 'function') player.one('dispose', () => {
+                            player.off('loadedmetadata', onLoadedMetadata);
+                            player.off('timeupdate', onTimeUpdate);
+                            player.off('ended', onEnded);
+                        });
+                        restorePlaybackPosition(player);
+                    }
                     // Call the original callback if provided
                     if (onPlayerInitCallback) {
                         onPlayerInitCallback(instance, elem);

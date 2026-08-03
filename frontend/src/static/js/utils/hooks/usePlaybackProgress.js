@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+export function shouldPersistPlaybackPosition(positionSeconds, lastPositionSeconds, completed = false) {
+    if (completed) return true;
+    return Math.abs(positionSeconds - lastPositionSeconds) >= 5;
+}
+
 export function usePlaybackProgress(mediaId, assetVersionId) {
     const [progress, setProgress] = useState(null);
     const lastSent = useRef(0);
@@ -13,7 +18,7 @@ export function usePlaybackProgress(mediaId, assetVersionId) {
         return () => { active = false; };
     }, [mediaId]);
     const save = useCallback((positionSeconds, durationSeconds, completed = false) => {
-        if (!mediaId || positionSeconds - lastSent.current < 5 && !completed) return;
+        if (!mediaId || !shouldPersistPlaybackPosition(positionSeconds, lastSent.current, completed)) return;
         lastSent.current = positionSeconds;
         return fetch(`/api/v1/media/${mediaId}/playback-progress/`, {
             method: 'PUT', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },

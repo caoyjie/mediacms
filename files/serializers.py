@@ -37,6 +37,7 @@ class MediaSerializer(serializers.ModelSerializer):
     class Meta:
         model = Media
         read_only_fields = (
+            "id",
             "friendly_token",
             "user",
             "add_date",
@@ -53,6 +54,7 @@ class MediaSerializer(serializers.ModelSerializer):
             "featured",
         )
         fields = (
+            "id",
             "friendly_token",
             "url",
             "api_url",
@@ -135,6 +137,8 @@ class SingleMediaSerializer(CategoriesInfoMixin, serializers.ModelSerializer):
     class Meta:
         model = Media
         read_only_fields = (
+            "id",
+            "active_asset_version_id",
             "friendly_token",
             "user",
             "add_date",
@@ -152,6 +156,7 @@ class SingleMediaSerializer(CategoriesInfoMixin, serializers.ModelSerializer):
             "is_reviewed",
         )
         fields = (
+            "id",
             "url",
             "user",
             "title",
@@ -187,6 +192,7 @@ class SingleMediaSerializer(CategoriesInfoMixin, serializers.ModelSerializer):
             "edit_url",
             "tags_info",
             "hls_info",
+            "active_asset_version_id",
             "license",
             "subtitles_info",
             "chapter_data",
