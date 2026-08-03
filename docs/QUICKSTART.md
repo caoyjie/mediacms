@@ -104,6 +104,49 @@ docker compose logs -f web
 curl http://localhost:8080/health
 ```
 
+## Step 7: Expose Frontend (Choose One)
+
+### Option A: CloudFlare Tunnel (Recommended)
+
+Easiest way to expose MediaCMS without port conflicts or firewall changes:
+
+```bash
+# Interactive setup
+make -f Makefile.production tunnel-setup
+
+# Or manually
+./deploy/scripts/setup_cloudflare_tunnel.sh mediacms.yourdomain.com mediacms
+
+# Check status
+make -f Makefile.production tunnel-status
+
+# View logs
+make -f Makefile.production tunnel-logs
+```
+
+**Benefits:**
+- No port 443 conflict with xray
+- Free SSL certificates
+- DDoS protection
+- No firewall configuration needed
+
+See [CLOUDFLARE-TUNNEL-DESIGN.md](CLOUDFLARE-TUNNEL-DESIGN.md) for details.
+
+### Option B: Traditional Reverse Proxy
+
+Configure nginx/xray to forward traffic to port 8080:
+
+```nginx
+# Example nginx config
+location / {
+    proxy_pass http://localhost:8080;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+```
+
 ## Troubleshooting
 
 ### Services won't start

@@ -43,6 +43,12 @@ help:
 	@echo "  make task6-rollback        - Execute rollback procedure"
 	@echo "  make task6-close-release   - Document release completion"
 	@echo ""
+	@echo "CloudFlare Tunnel (Alternative to Reverse Proxy)"
+	@echo "  make tunnel-setup          - Interactive CloudFlare Tunnel setup"
+	@echo "  make tunnel-status         - Check tunnel status"
+	@echo "  make tunnel-logs           - View tunnel logs"
+	@echo "  make tunnel-restart        - Restart tunnel service"
+	@echo ""
 	@echo "Utility Commands"
 	@echo "  make status                - Show current deployment status"
 	@echo "  make logs                  - Tail production logs"
@@ -387,3 +393,62 @@ clean-evidence:
 	@read -p "Type 'DELETE' to proceed: " confirm; test "$$confirm" = "DELETE" || (echo "Aborted"; exit 1)
 	rm -rf /etc/mediacms/release/*
 	@echo "✓ Evidence cleaned"
+
+# ============================================================================
+# CloudFlare Tunnel (Alternative to Traditional Reverse Proxy)
+# ============================================================================
+
+.PHONY: tunnel-setup
+tunnel-setup:
+	@echo "=== CloudFlare Tunnel Setup ==="
+	@echo ""
+	@echo "This will set up a CloudFlare Tunnel to expose MediaCMS frontend."
+	@echo "You will need:"
+	@echo "  - CloudFlare account with a domain"
+	@echo "  - Domain DNS managed by CloudFlare"
+	@echo ""
+	@read -p "Enter your domain (e.g., mediacms.yourdomain.com): " domain; \
+	read -p "Enter tunnel name (default: mediacms): " tunnel; \
+	tunnel=$${tunnel:-mediacms}; \
+	./deploy/scripts/setup_cloudflare_tunnel.sh "$$domain" "$$tunnel"
+
+.PHONY: tunnel-status
+tunnel-status:
+	@echo "=== CloudFlare Tunnel Status ==="
+	@echo ""
+	@echo "Service status:"
+	@systemctl is-active cloudflared && echo "  ✓ Running" || echo "  ✗ Not running"
+	@echo ""
+	@echo "Tunnel information:"
+	@cloudflared tunnel list 2>/dev/null || echo "  No tunnels found (cloudflared not installed?)"
+	@echo ""
+	@echo "Service details:"
+	@systemctl status cloudflared --no-pager -l || echo "  Service not installed"
+
+.PHONY: tunnel-logs
+tunnel-logs:
+	@echo "=== CloudFlare Tunnel Logs (Ctrl+C to exit) ==="
+	@journalctl -u cloudflared -f
+
+.PHONY: tunnel-restart
+tunnel-restart:
+	@echo "Restarting CloudFlare Tunnel..."
+	@systemctl restart cloudflared
+	@sleep 2
+	@systemctl is-active cloudflared && echo "✓ Tunnel restarted successfully" || echo "✗ Failed to restart tunnel"
+
+.PHONY: tunnel-stop
+tunnel-stop:
+	@echo "Stopping CloudFlare Tunnel..."
+	@systemctl stop cloudflared
+	@echo "✓ Tunnel stopped"
+
+.PHONY: tunnel-uninstall
+tunnel-uninstall:
+	@echo "WARNING: This will remove the CloudFlare Tunnel service"
+	@read -p "Type 'UNINSTALL' to proceed: " confirm; test "$$confirm" = "UNINSTALL" || (echo "Aborted"; exit 1)
+	@systemctl stop cloudflared 2>/dev/null || true
+	@systemctl disable cloudflared 2>/dev/null || true
+	@cloudflared service uninstall 2>/dev/null || true
+	@echo "✓ Tunnel service uninstalled (tunnel still exists in CloudFlare)"
+	@echo "  To fully delete: cloudflared tunnel delete <tunnel-name>"
