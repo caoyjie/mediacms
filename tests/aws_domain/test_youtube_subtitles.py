@@ -1,4 +1,5 @@
 import pytest
+import yt_dlp
 
 from files.services.youtube import CaptionTrack, classify_ytdlp_error, discovered_caption_tracks, fetch_caption_text, normalize_youtube_url, choose_caption_tracks
 from files.services.subtitles import (
@@ -61,6 +62,33 @@ def test_subtitle_failure_classification_is_safe():
     assert classify_ytdlp_error("HTTP Error 429: Too Many Requests") == "retryable"
     assert classify_ytdlp_error("no subtitles available") == "unavailable"
     assert classify_ytdlp_error("some unknown failure") == "unknown"
+
+
+def test_extract_info_reads_django_settings_without_name_error(monkeypatch):
+    captured = {}
+
+    class FakeYoutubeDL:
+        def __init__(self, options):
+            captured.update(options)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def extract_info(self, url, download=False):
+            assert url == "https://www.youtube.com/watch?v=abc123"
+            assert download is False
+            return {"id": "abc123", "title": "Fixture"}
+
+    monkeypatch.setattr(yt_dlp, "YoutubeDL", FakeYoutubeDL)
+    from files.services.youtube import extract_info
+
+    result = extract_info("https://www.youtube.com/watch?v=abc123")
+
+    assert result["id"] == "abc123"
+    assert captured["noplaylist"] is True
 
 
 def test_caption_fetch_uses_utf8_and_rejects_oversized_payload():

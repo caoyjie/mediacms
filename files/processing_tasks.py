@@ -1,3 +1,5 @@
+from dataclasses import asdict
+
 from celery import shared_task
 from files.services.processing_runner import reconcile_processing, run_processing_tick
 import files.services.processing_runner as processing_runner
@@ -23,4 +25,4 @@ def aws_processing_tick(job_id=None):
 @shared_task(name="reconcile_aws_processing")
 def reconcile_aws_processing():
     processing_runner.aws_processing_tick = aws_processing_tick
-    return reconcile_processing()
+    return asdict(reconcile_processing())

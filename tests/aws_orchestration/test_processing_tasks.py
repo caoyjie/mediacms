@@ -35,11 +35,10 @@ def test_reconciler_task_delegates_to_postgres_recovery(monkeypatch):
         lambda: ReconcileResult(wakeups=2),
     )
 
-    assert reconcile_aws_processing.run() == ReconcileResult(wakeups=2)
+    assert reconcile_aws_processing.run() == {"wakeups": 2}
 
 
 @pytest.mark.parametrize("task_name", ("aws_processing_tick", "reconcile_aws_processing"))
 def test_tasks_are_registered_with_stable_names(task_name):
     task = globals()[task_name]
     assert task.name == task_name
-
