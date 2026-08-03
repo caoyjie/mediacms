@@ -11,7 +11,7 @@ from tests.users.factories import UserFactory
 def playback_media():
     media = Media.objects.create(
         title="Playback test",
-        user=UserFactory(),
+        user=UserFactory(username=f"media-{uuid.uuid4()}"),
         friendly_token=f"playback-{uuid.uuid4()}",
         storage_backend="aws",
         media_file="originals/playback/source.mp4",
@@ -23,7 +23,7 @@ def playback_media():
 @pytest.mark.django_db
 def test_playback_progress_is_bound_to_authenticated_user_and_asset_version(playback_media):
     media, version = playback_media
-    user = UserFactory()
+    user = UserFactory(username=f"viewer-{uuid.uuid4()}")
     client = APIClient()
     client.force_authenticate(user=user)
 
