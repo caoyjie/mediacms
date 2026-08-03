@@ -154,6 +154,7 @@ urlpatterns = [
     path("api/v1/aws/jobs/", views.AWSJobListView.as_view()),
     path("api/v1/aws/jobs/<uuid:job_id>/", views.AWSJobDetailView.as_view()),
     path("api/v1/aws/jobs/<uuid:job_id>/<str:action>/", views.AWSJobActionView.as_view()),
+    path("api/v1/media/<int:media_id>/playback-progress/", views.PlaybackProgressView.as_view()),
     re_path(r"^manage/comments$", views.manage_comments, name="manage_comments"),
     re_path(r"^manage/media$", views.manage_media, name="manage_media"),
     re_path(r"^manage/users$", views.manage_users, name="manage_users"),
