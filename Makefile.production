@@ -1,0 +1,389 @@
+# MediaCMS Production Deployment Makefile
+# Based on: docs/superpowers/plans/2026-08-03-production-image-and-deployment.md
+# Release baseline: bed7a63 on feat/aws-backend-integration
+
+.PHONY: help
+help:
+	@echo "MediaCMS Production Deployment"
+	@echo "==============================="
+	@echo ""
+	@echo "Task 1: Inspection (COMPLETED)"
+	@echo "  make task1-verify          - Verify Task 1 findings"
+	@echo ""
+	@echo "Task 2: Production Configuration"
+	@echo "  make task2-create-config   - Create docker-compose.production.yaml and .env.production.example"
+	@echo "  make task2-validate        - Validate production Compose config renders correctly"
+	@echo ""
+	@echo "Task 3: Build and Publish Images"
+	@echo "  make task3-run-tests       - Run repository tests before publishing"
+	@echo "  make task3-trigger-build   - Trigger GitHub Actions build (manual)"
+	@echo "  make task3-verify-images   - Verify published images exist and are pullable"
+	@echo "  make task3-test-runtime    - Test runtime contents in disposable container"
+	@echo ""
+	@echo "Task 4: AWS Production Resources"
+	@echo "  make task4-validate        - Validate CloudFormation templates"
+	@echo "  make task4-create-changeset - Create mediacms-prod change set (review only)"
+	@echo "  make task4-describe-changeset - Describe the change set for review"
+	@echo "  make task4-execute         - Execute approved change set"
+	@echo "  make task4-extract-outputs - Extract runtime AWS credentials"
+	@echo "  make task4-verify-access   - Verify AWS access (positive and negative checks)"
+	@echo ""
+	@echo "Task 5: Deploy Production"
+	@echo "  make task5-backup-db       - Back up database (if migrating)"
+	@echo "  make task5-install-config  - Install protected runtime files"
+	@echo "  make task5-pull-images     - Pull exact image digests from GHCR"
+	@echo "  make task5-start-infra     - Start PostgreSQL and Redis"
+	@echo "  make task5-run-migrations  - Run database migrations"
+	@echo "  make task5-start-services  - Start web, workers, and beat"
+	@echo "  make task5-smoke-test      - Run application smoke tests"
+	@echo ""
+	@echo "Task 6: Cutover and Monitoring"
+	@echo "  make task6-switch-traffic  - Update reverse proxy/tunnel routing"
+	@echo "  make task6-monitor         - Display monitoring dashboard"
+	@echo "  make task6-rollback        - Execute rollback procedure"
+	@echo "  make task6-close-release   - Document release completion"
+	@echo ""
+	@echo "Utility Commands"
+	@echo "  make status                - Show current deployment status"
+	@echo "  make logs                  - Tail production logs"
+	@echo "  make clean-evidence        - Clean up evidence files (careful!)"
+
+# Variables
+RELEASE_COMMIT := bed7a63
+RELEASE_TIMESTAMP := $(shell date +%Y%m%d-%H%M%S)
+RELEASE_DIR := /etc/mediacms/release/$(RELEASE_TIMESTAMP)
+EVIDENCE_DIR := /etc/mediacms/release/20260803-205435
+COMPOSE_FILE := docker-compose.production.yaml
+ENV_FILE := .env.production
+PROJECT_NAME := mediacms-prod
+
+# ============================================================================
+# Task 1: Inspection (COMPLETED)
+# ============================================================================
+
+.PHONY: task1-verify
+task1-verify:
+	@echo "==> Verifying Task 1 findings..."
+	@test -f $(EVIDENCE_DIR)/inventory.txt || (echo "ERROR: Evidence not found"; exit 1)
+	@echo "✓ Evidence directory exists: $(EVIDENCE_DIR)"
+	@git rev-parse HEAD | grep -q $(RELEASE_COMMIT) || (echo "ERROR: Not on release commit"; exit 1)
+	@echo "✓ On release commit: $(RELEASE_COMMIT)"
+	@echo "✓ Task 1 verification complete"
+	@echo ""
+	@echo "Key findings:"
+	@cat $(EVIDENCE_DIR)/inventory.txt | head -30
+
+# ============================================================================
+# Task 2: Production Configuration
+# ============================================================================
+
+.PHONY: task2-create-config
+task2-create-config:
+	@echo "==> Creating production configuration files..."
+	@echo "This will create:"
+	@echo "  - docker-compose.production.yaml"
+	@echo "  - .env.production.example"
+	@echo ""
+	@echo "ACTION REQUIRED: Manually create these files based on:"
+	@echo "  - docker-compose.yaml (current structure)"
+	@echo "  - .env.aws-test.example (variable reference)"
+	@echo ""
+	@echo "Key requirements:"
+	@echo "  - Remove source code bind mounts"
+	@echo "  - Use image: \$${MEDIACMS_IMAGE:-ghcr.io/caoyjie/mediacms:$(RELEASE_COMMIT)}"
+	@echo "  - Set AWS_ENVIRONMENT=prod (not dev)"
+	@echo "  - Add health checks and memory limits"
+	@echo "  - Worker concurrency = 1"
+	@echo "  - NO port 80/443 bindings (xray owns 443)"
+
+.PHONY: task2-validate
+task2-validate:
+	@echo "==> Validating production Compose configuration..."
+	@test -f $(COMPOSE_FILE) || (echo "ERROR: $(COMPOSE_FILE) not found"; exit 1)
+	@test -f $(ENV_FILE).example || (echo "ERROR: $(ENV_FILE).example not found"; exit 1)
+	docker compose -f $(COMPOSE_FILE) config > /dev/null
+	@echo "✓ Compose config renders successfully"
+	@echo ""
+	@echo "Checking for test values..."
+	@! grep -q "DEVELOPMENT_MODE=True" $(ENV_FILE).example || (echo "ERROR: DEVELOPMENT_MODE=True found"; exit 1)
+	@! grep -q "AWS_ENVIRONMENT=dev" $(ENV_FILE).example || (echo "ERROR: AWS_ENVIRONMENT=dev found"; exit 1)
+	@! grep -q ":latest" $(COMPOSE_FILE) || (echo "WARNING: :latest tag found"; exit 1)
+	@echo "✓ No test values detected"
+
+# ============================================================================
+# Task 3: Build and Publish Images
+# ============================================================================
+
+.PHONY: task3-run-tests
+task3-run-tests:
+	@echo "==> Running repository tests..."
+	bash deploy/scripts/test_environment_probes.sh
+	bash deploy/scripts/test_aws_infrastructure_scripts.sh
+	@echo "✓ Tests passed"
+
+.PHONY: task3-trigger-build
+task3-trigger-build:
+	@echo "==> Triggering GitHub Actions build..."
+	@echo ""
+	@echo "MANUAL ACTION REQUIRED:"
+	@echo "1. Go to: https://github.com/caoyjie/mediacms/actions/workflows/docker-build-push.yml"
+	@echo "2. Click 'Run workflow'"
+	@echo "3. Select branch: feat/aws-backend-integration"
+	@echo "4. Confirm commit: $(RELEASE_COMMIT)"
+	@echo "5. Wait for build completion"
+	@echo ""
+	@echo "Expected outputs:"
+	@echo "  - ghcr.io/caoyjie/mediacms:$(RELEASE_COMMIT)"
+	@echo "  - ghcr.io/caoyjie/mediacms:$(RELEASE_COMMIT)-full"
+
+.PHONY: task3-verify-images
+task3-verify-images:
+	@echo "==> Verifying published images..."
+	docker pull ghcr.io/caoyjie/mediacms:$(RELEASE_COMMIT)
+	@echo "✓ Base image pulled successfully"
+	docker pull ghcr.io/caoyjie/mediacms:$(RELEASE_COMMIT)-full
+	@echo "✓ Full image pulled successfully"
+	@echo ""
+	@echo "Image digests:"
+	@docker images --digests ghcr.io/caoyjie/mediacms --format "table {{.Repository}}:{{.Tag}}\t{{.Digest}}" | grep $(RELEASE_COMMIT)
+
+.PHONY: task3-test-runtime
+task3-test-runtime:
+	@echo "==> Testing runtime contents..."
+	docker run --rm ghcr.io/caoyjie/mediacms:$(RELEASE_COMMIT) python --version
+	docker run --rm ghcr.io/caoyjie/mediacms:$(RELEASE_COMMIT) ffmpeg -version | head -1
+	docker run --rm ghcr.io/caoyjie/mediacms:$(RELEASE_COMMIT) deno --version
+	docker run --rm ghcr.io/caoyjie/mediacms:$(RELEASE_COMMIT) yt-dlp --version
+	docker run --rm ghcr.io/caoyjie/mediacms:$(RELEASE_COMMIT) celery --version
+	@echo "✓ Runtime verification complete"
+
+# ============================================================================
+# Task 4: AWS Production Resources
+# ============================================================================
+
+.PHONY: task4-validate
+task4-validate:
+	@echo "==> Validating CloudFormation templates..."
+	cd infra/aws && bash ../../deploy/scripts/validate_aws_infrastructure.sh
+	@echo "✓ Templates validated"
+	@echo ""
+	@echo "Verifying AWS identity..."
+	aws sts get-caller-identity --profile default --region us-east-1
+
+.PHONY: task4-create-changeset
+task4-create-changeset:
+	@echo "==> Creating mediacms-prod change set..."
+	@echo ""
+	@echo "MANUAL ACTION REQUIRED:"
+	@echo "Review and edit deploy/scripts/create_aws_change_set.sh parameters:"
+	@echo "  - STACK_NAME=mediacms-prod"
+	@echo "  - ENVIRONMENT=prod"
+	@echo "  - AWS_REGION=us-east-1"
+	@echo ""
+	@read -p "Press Enter to continue or Ctrl+C to abort..."
+	cd infra/aws && bash ../../deploy/scripts/create_aws_change_set.sh
+
+.PHONY: task4-describe-changeset
+task4-describe-changeset:
+	@echo "==> Describing change set for review..."
+	cd infra/aws && bash ../../deploy/scripts/describe_aws_change_set.sh
+	@echo ""
+	@echo "Review the changes above carefully before executing."
+
+.PHONY: task4-execute
+task4-execute:
+	@echo "==> Executing approved change set..."
+	@echo ""
+	@echo "WARNING: This will create production AWS resources:"
+	@echo "  - S3 bucket for media storage"
+	@echo "  - MediaConvert templates"
+	@echo "  - CloudFront distribution"
+	@echo "  - IAM roles and access keys"
+	@echo ""
+	@read -p "Type 'EXECUTE' to proceed: " confirm; test "$$confirm" = "EXECUTE" || (echo "Aborted"; exit 1)
+	aws cloudformation execute-change-set \
+		--change-set-name mediacms-prod-changeset \
+		--stack-name mediacms-prod \
+		--profile default \
+		--region us-east-1
+	@echo "Waiting for stack to complete..."
+	aws cloudformation wait stack-create-complete \
+		--stack-name mediacms-prod \
+		--profile default \
+		--region us-east-1
+
+.PHONY: task4-extract-outputs
+task4-extract-outputs:
+	@echo "==> Extracting runtime AWS credentials..."
+	@mkdir -p /etc/mediacms/secrets
+	cd infra/aws && bash ../../deploy/scripts/extract_runtime_aws_env.sh > /etc/mediacms/secrets/aws-runtime.env
+	@chmod 640 /etc/mediacms/secrets/aws-runtime.env
+	@chown root:root /etc/mediacms/secrets/aws-runtime.env
+	@echo "✓ Credentials extracted to /etc/mediacms/secrets/aws-runtime.env"
+	@echo "✓ Permissions set to 0640"
+
+.PHONY: task4-verify-access
+task4-verify-access:
+	@echo "==> Verifying AWS access..."
+	bash deploy/scripts/validate_aws_infrastructure.sh
+	@echo "✓ AWS verification complete"
+
+# ============================================================================
+# Task 5: Deploy Production
+# ============================================================================
+
+.PHONY: task5-backup-db
+task5-backup-db:
+	@echo "==> Backing up database..."
+	@echo "Database mode: new-production-database (no backup needed)"
+	@echo "Skipping backup step."
+
+.PHONY: task5-install-config
+task5-install-config:
+	@echo "==> Installing protected runtime files..."
+	@test -f $(ENV_FILE) || (echo "ERROR: $(ENV_FILE) not found. Copy from $(ENV_FILE).example and fill in secrets."; exit 1)
+	@mkdir -p /etc/mediacms/compose
+	@cp $(COMPOSE_FILE) /etc/mediacms/compose/$(COMPOSE_FILE)
+	@echo "✓ Compose file installed"
+	@echo ""
+	@echo "Verifying no test values in $(ENV_FILE)..."
+	@! grep -q "DEVELOPMENT_MODE=True" $(ENV_FILE) || (echo "ERROR: DEVELOPMENT_MODE=True found"; exit 1)
+	@! grep -q "AWS_ENVIRONMENT=dev" $(ENV_FILE) || (echo "ERROR: AWS_ENVIRONMENT=dev found"; exit 1)
+	@! grep -q "changeme" $(ENV_FILE) || (echo "ERROR: Default password found"; exit 1)
+	@echo "✓ Environment file validated"
+
+.PHONY: task5-pull-images
+task5-pull-images:
+	@echo "==> Pulling exact image digests..."
+	@echo "Authenticating to GHCR..."
+	@test -n "$(GHCR_TOKEN)" || (echo "ERROR: GHCR_TOKEN not set. Export GHCR_TOKEN=<your-token>"; exit 1)
+	@echo "$(GHCR_TOKEN)" | docker login ghcr.io -u caoyjie --password-stdin
+	docker compose -f $(COMPOSE_FILE) pull
+	@echo "✓ Images pulled"
+
+.PHONY: task5-start-infra
+task5-start-infra:
+	@echo "==> Starting PostgreSQL and Redis..."
+	docker compose -f $(COMPOSE_FILE) --project-name $(PROJECT_NAME) up -d postgres redis
+	@echo "Waiting for services to be healthy..."
+	@sleep 10
+	docker compose -f $(COMPOSE_FILE) --project-name $(PROJECT_NAME) ps
+	@echo "✓ Infrastructure started"
+
+.PHONY: task5-run-migrations
+task5-run-migrations:
+	@echo "==> Running database migrations..."
+	docker compose -f $(COMPOSE_FILE) --project-name $(PROJECT_NAME) run --rm migrations
+	@echo "✓ Migrations complete"
+
+.PHONY: task5-start-services
+task5-start-services:
+	@echo "==> Starting application services..."
+	docker compose -f $(COMPOSE_FILE) --project-name $(PROJECT_NAME) up -d web celery_beat celery_worker celery_metadata
+	@echo "Waiting for services to be healthy..."
+	@sleep 10
+	docker compose -f $(COMPOSE_FILE) --project-name $(PROJECT_NAME) ps
+	@echo "✓ Services started"
+
+.PHONY: task5-smoke-test
+task5-smoke-test:
+	@echo "==> Running smoke tests..."
+	docker compose -f $(COMPOSE_FILE) --project-name $(PROJECT_NAME) exec web python manage.py check
+	@echo "✓ Django check passed"
+	@echo ""
+	@echo "MANUAL TESTS REQUIRED:"
+	@echo "1. Admin login: http://localhost:8000/admin"
+	@echo "2. Health endpoint: http://localhost:8000/health"
+	@echo "3. Static assets load correctly"
+	@echo "4. Upload small test video"
+	@echo "5. Verify S3 promotion"
+	@echo "6. Verify MediaConvert job creation"
+	@echo "7. Verify private CloudFront playback"
+
+# ============================================================================
+# Task 6: Cutover and Monitoring
+# ============================================================================
+
+.PHONY: task6-switch-traffic
+task6-switch-traffic:
+	@echo "==> Switching traffic to production..."
+	@echo ""
+	@echo "MANUAL ACTION REQUIRED:"
+	@echo "Update reverse proxy configuration:"
+	@echo "  - Option 1: Configure xray to proxy to MediaCMS backend"
+	@echo "  - Option 2: Update Cloudflare Tunnel routing"
+	@echo ""
+	@echo "After switching, verify:"
+	@echo "  - HTTPS works correctly"
+	@echo "  - FRONTEND_HOST matches"
+	@echo "  - CORS/CSRF headers correct"
+	@echo "  - Signed CloudFront cookies work"
+
+.PHONY: task6-monitor
+task6-monitor:
+	@echo "==> Monitoring production..."
+	@echo ""
+	@echo "Container health:"
+	@docker compose -f $(COMPOSE_FILE) --project-name $(PROJECT_NAME) ps
+	@echo ""
+	@echo "Memory usage:"
+	@docker stats --no-stream --format "table {{.Container}}\t{{.MemUsage}}\t{{.MemPerc}}"
+	@echo ""
+	@echo "Recent logs:"
+	@docker compose -f $(COMPOSE_FILE) --project-name $(PROJECT_NAME) logs --tail=50
+
+.PHONY: task6-rollback
+task6-rollback:
+	@echo "==> Executing rollback..."
+	@echo ""
+	@echo "WARNING: This will stop all production services"
+	@read -p "Type 'ROLLBACK' to proceed: " confirm; test "$$confirm" = "ROLLBACK" || (echo "Aborted"; exit 1)
+	docker compose -f $(COMPOSE_FILE) --project-name $(PROJECT_NAME) down
+	@echo "✓ Services stopped"
+	@echo ""
+	@echo "MANUAL ACTION REQUIRED:"
+	@echo "1. Restore previous reverse proxy configuration"
+	@echo "2. Verify traffic routing to backup system"
+	@echo "3. DO NOT delete AWS production resources"
+
+.PHONY: task6-close-release
+task6-close-release:
+	@echo "==> Closing release..."
+	@mkdir -p $(RELEASE_DIR)
+	@echo "Release: $(RELEASE_COMMIT)" > $(RELEASE_DIR)/cutover-report.md
+	@echo "Timestamp: $(RELEASE_TIMESTAMP)" >> $(RELEASE_DIR)/cutover-report.md
+	@echo "" >> $(RELEASE_DIR)/cutover-report.md
+	@echo "Image digests:" >> $(RELEASE_DIR)/cutover-report.md
+	@docker images --digests ghcr.io/caoyjie/mediacms --format "{{.Repository}}:{{.Tag}} {{.Digest}}" | grep $(RELEASE_COMMIT) >> $(RELEASE_DIR)/cutover-report.md
+	@echo "" >> $(RELEASE_DIR)/cutover-report.md
+	@echo "Compose config checksum:" >> $(RELEASE_DIR)/cutover-report.md
+	@sha256sum /etc/mediacms/compose/$(COMPOSE_FILE) >> $(RELEASE_DIR)/cutover-report.md
+	@echo "✓ Release report created: $(RELEASE_DIR)/cutover-report.md"
+
+# ============================================================================
+# Utility Commands
+# ============================================================================
+
+.PHONY: status
+status:
+	@echo "==> Deployment Status"
+	@echo ""
+	@echo "Release baseline: $(RELEASE_COMMIT)"
+	@echo "Current HEAD: $$(git rev-parse HEAD)"
+	@echo ""
+	@echo "Running containers:"
+	@docker compose -f $(COMPOSE_FILE) --project-name $(PROJECT_NAME) ps 2>/dev/null || echo "  (none)"
+	@echo ""
+	@echo "Task 1 evidence: $(EVIDENCE_DIR)"
+	@test -d $(EVIDENCE_DIR) && echo "  ✓ Complete" || echo "  ✗ Not found"
+
+.PHONY: logs
+logs:
+	docker compose -f $(COMPOSE_FILE) --project-name $(PROJECT_NAME) logs -f --tail=100
+
+.PHONY: clean-evidence
+clean-evidence:
+	@echo "WARNING: This will delete evidence files"
+	@read -p "Type 'DELETE' to proceed: " confirm; test "$$confirm" = "DELETE" || (echo "Aborted"; exit 1)
+	rm -rf /etc/mediacms/release/*
+	@echo "✓ Evidence cleaned"
