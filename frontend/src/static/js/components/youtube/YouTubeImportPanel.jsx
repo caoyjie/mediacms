@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useYouTubeJob } from '../../utils/hooks/useYouTubeJob';
 import YouTubeMetadataCard from './YouTubeMetadataCard';
 
@@ -12,7 +12,16 @@ export default function YouTubeImportPanel() {
     const [title, setTitle] = useState('');
     const [jobId, setJobId] = useState(null);
     const [message, setMessage] = useState('');
+    const [cookieStatus, setCookieStatus] = useState(null);
+    const [cookieVersionId, setCookieVersionId] = useState(null);
     const { job, error } = useYouTubeJob(jobId);
+
+    useEffect(() => {
+        fetch('/api/v1/aws/youtube/cookies/status/', { credentials: 'same-origin' })
+            .then((response) => response.ok ? response.json() : null)
+            .then((data) => data && setCookieStatus(data))
+            .catch(() => {});
+    }, []);
 
     async function submit(event) {
         event.preventDefault();
@@ -32,6 +41,31 @@ export default function YouTubeImportPanel() {
         setMessage('Metadata discovery started.');
     }
 
+    async function uploadCookies(event) {
+        const file = event.target.files && event.target.files[0];
+        if (!file) return;
+        const body = new FormData();
+        body.append('cookies', file);
+        const response = await fetch('/api/v1/aws/youtube/cookies/', { method: 'POST', credentials: 'same-origin', headers: { 'X-CSRFToken': csrfToken() }, body });
+        const data = await response.json();
+        if (!response.ok) {
+            setMessage(data.detail || 'Cookie upload failed.');
+            return;
+        }
+        setCookieVersionId(data.cookie_version_id);
+        setCookieStatus({ available: true, uploaded_at: data.uploaded_at, status: 'active' });
+        setMessage('Cookies uploaded.');
+    }
+
+    async function resume() {
+        const response = await fetch(`/api/v1/aws/youtube/jobs/${jobId}/resume/`, {
+            method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken() },
+            body: JSON.stringify(cookieVersionId ? { cookie_version_id: cookieVersionId } : {}),
+        });
+        const data = await response.json();
+        setMessage(response.ok ? 'Job resumed.' : (data.detail || 'Unable to resume job.'));
+    }
+
     return (
         <section className="youtube-import-panel" aria-label="YouTube video import">
             <h2>YouTube video</h2>
@@ -42,9 +76,16 @@ export default function YouTubeImportPanel() {
                 <input id="youtube-title" type="text" value={title} onChange={(event) => setTitle(event.target.value)} />
                 <button type="submit">Discover metadata</button>
             </form>
+            <div className="youtube-cookie-status">
+                <strong>Cookies</strong>
+                {cookieStatus && cookieStatus.available ? <span>Last uploaded: {new Date(cookieStatus.uploaded_at).toLocaleString()}</span> : <span>No cookies have been uploaded. Restricted videos may fail.</span>}
+                <label htmlFor="youtube-cookies">Upload cookies.txt</label>
+                <input id="youtube-cookies" type="file" accept="text/plain,.txt" onChange={uploadCookies} />
+            </div>
             {message ? <p role="status">{message}</p> : null}
             {error ? <p role="alert">{error.message}</p> : null}
             {job ? <YouTubeMetadataCard metadata={job.metadata} title={job.title} onTitleChange={setTitle} disabled={job.status === 'completed'} /> : null}
+            {job && job.stage === 'action_required' && /cookie/i.test(job.safe_error || '') ? <button type="button" onClick={resume}>Resume with cookies</button> : null}
         </section>
     );
 }
