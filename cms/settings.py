@@ -457,17 +457,10 @@ DATABASES = {
         "PORT": "5432",
         "USER": "mediacms",
         "PASSWORD": "mediacms",
-        "OPTIONS": {
-            "pool": {
-                "min_size": 2,
-                "max_size": 8,
-                "timeout": 10,
-                "max_lifetime": 30 * 60,
-                "max_idle": 10 * 60,
-            }
-        },
+        "OPTIONS": {},
     }
 }
+
 
 
 REDIS_LOCATION = "redis://127.0.0.1:6379/1"
