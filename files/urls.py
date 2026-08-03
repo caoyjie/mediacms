@@ -147,6 +147,7 @@ urlpatterns = [
     re_path(r"^api/v1/media-auth/bootstrap$", views.cloudfront_bootstrap, name="cloudfront_bootstrap"),
     re_path(r"^api/v1/media-auth/logout$", views.cloudfront_logout, name="cloudfront_logout"),
     path("api/v1/aws/youtube/jobs/", views.YouTubeJobCreateView.as_view()),
+    path("api/v1/aws/youtube/jobs/<uuid:job_id>/", views.YouTubeJobDetailView.as_view()),
     path("api/v1/aws/youtube/jobs/<uuid:job_id>/resume/", views.YouTubeJobResumeView.as_view()),
     path("api/v1/aws/youtube/cookies/", views.YouTubeCookieUploadView.as_view()),
     path("api/v1/aws/youtube/cookies/status/", views.YouTubeCookieStatusView.as_view()),

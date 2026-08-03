@@ -3,6 +3,7 @@ from rest_framework.parsers import FormParser, MultiPartParser, JSONParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from files.models import MediaIngestionJob, MediaJobCheckpoint
 from files.services.youtube_cookies import latest_cookie, store_cookies
 from files.services.youtube_jobs import create_youtube_job, resume_youtube_job
 
@@ -62,3 +63,24 @@ class YouTubeJobResumeView(APIView):
         except ValueError as error:
             return Response({"detail": str(error)}, status=status.HTTP_400_BAD_REQUEST)
         return Response({"job_id": str(job.id), "stage": job.stage, "status": job.status})
+
+
+class YouTubeJobDetailView(APIView):
+    permission_classes = (permissions.IsAdminUser,)
+
+    def get(self, request, job_id):
+        job = MediaIngestionJob.objects.select_related("media").filter(pk=job_id, source_type="youtube").first()
+        if job is None:
+            return Response({"detail": "YouTube job not found."}, status=status.HTTP_404_NOT_FOUND)
+        checkpoint = MediaJobCheckpoint.objects.filter(attempt__job=job, name="metadata").order_by("-created_at").first()
+        return Response({
+            "job_id": str(job.id),
+            "media_id": str(job.media_id) if job.media_id else None,
+            "status": job.status,
+            "stage": job.stage,
+            "progress": job.progress,
+            "safe_error": job.safe_error,
+            "title": job.media.title if job.media else job.media_title_snapshot,
+            "metadata": (job.source_metadata or {}).get("discovered") or (checkpoint.evidence if checkpoint else None),
+            "metadata_checkpoint": checkpoint.status if checkpoint else "pending",
+        })

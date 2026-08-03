@@ -167,6 +167,19 @@ def run_youtube_step(attempt, *, now=None):
             },
             completed_at=now,
         )
+        source_metadata = dict(attempt.job.source_metadata or {})
+        source_metadata["discovered"] = {
+            "video_id": metadata.video_id,
+            "title": metadata.title,
+            "description": metadata.description,
+            "duration": metadata.duration,
+            "thumbnail": metadata.thumbnail,
+        }
+        MediaIngestionJob.objects.filter(pk=attempt.job_id).update(
+            source_metadata=source_metadata,
+            media_title_snapshot=metadata.title,
+            stage="metadata_ready",
+        )
         if attempt.job.media and not (attempt.job.media.metadata_sources or {}).get("title"):
             attempt.job.media.title = metadata.title
             attempt.job.media.description = metadata.description
