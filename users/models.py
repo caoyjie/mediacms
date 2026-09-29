@@ -14,6 +14,8 @@ import files.helpers as helpers
 from files.models import Category, Media, MediaPermission, Tag
 from rbac.models import RBACGroup
 
+from .image_processors import CenterCropBanner
+
 
 class User(AbstractUser):
     logo = ProcessedImageField(
@@ -249,7 +251,7 @@ class Channel(models.Model):
     friendly_token = models.CharField(blank=True, max_length=12)
     banner_logo = ProcessedImageField(
         upload_to="userlogos/%Y/%m/%d",
-        processors=[ResizeToFill(900, 200)],
+        processors=[CenterCropBanner()],
         default="userlogos/banner.jpg",
         format="JPEG",
         options={"quality": 85},
