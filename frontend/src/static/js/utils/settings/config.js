@@ -25,6 +25,7 @@ export function config(glbl) {
 
   url.init({
     home: glbl.url.home,
+    appearance: glbl.url.appearance || '/appearance',
     admin: !glbl.user.is.anonymous && glbl.user.is.admin ? glbl.url.admin : '',
     error404: glbl.url.error404,
     embed: glbl.site.url.replace(/\/+$/, '') + '/embed?m=',

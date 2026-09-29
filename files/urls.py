@@ -12,6 +12,7 @@ friendly_token = r"(?P<friendly_token>[\w\-_]*)"
 urlpatterns = [
     path("i18n/", include("django.conf.urls.i18n")),
     re_path(r"^$", views.index),
+    path("appearance", views.appearance, name="appearance"),
     re_path(r"^about", views.about, name="about"),
     re_path(r"^setlanguage", views.setlanguage, name="setlanguage"),
     re_path(r"^add_subtitle", views.add_subtitle, name="add_subtitle"),

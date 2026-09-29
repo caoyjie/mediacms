@@ -81,6 +81,7 @@ const PAGES = {
   liked: { id: 'liked', title: 'Liked media', component: 'LikedMediaPage' },
   tags: { id: 'tags', title: 'Tags', component: 'TagsPage' },
   categories: { id: 'categories', title: 'Categories', component: 'CategoriesPage' },
+  appearance: { id: 'appearance', title: 'Appearance', component: 'AppearancePage' },
   'manage-media': { id: 'manage-media', title: 'Manage media', component: 'ManageMediaPage' },
   'manage-users': { id: 'manage-users', title: 'Manage users', component: 'ManageUsersPage' },
   'manage-comments': { id: 'manage-comments', title: 'Manage comments', component: 'ManageCommentsPage' },

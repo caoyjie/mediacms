@@ -1,4 +1,5 @@
 export * from './CategoriesPage';
+export * from './AppearancePage';
 export * from './EmbedPage';
 export * from './FeaturedMediaPage';
 export * from './HistoryPage';

@@ -1,5 +1,6 @@
 module.exports = {
   home: './index.html',
+  appearance: './appearance.html',
   search: './search.html',
   latestMedia: './latest.html',
   featuredMedia: './featured.html',

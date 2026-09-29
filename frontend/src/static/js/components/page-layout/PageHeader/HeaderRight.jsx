@@ -3,7 +3,6 @@ import { useLayout, usePopup } from '../../../utils/hooks/';
 import { PageStore } from '../../../utils/stores/';
 import { HeaderConsumer, MemberConsumer, LinksConsumer } from '../../../utils/contexts/';
 import { CircleIconButton, MaterialIcon, NavigationContentApp, NavigationMenuList, PopupTop, PopupMain, UserThumbnail } from '../../_shared';
-import { HeaderThemeSwitcher } from './HeaderThemeSwitcher';
 import { translateString } from '../../../utils/helpers/';
 
 function headerPopupPages(user, popupNavItems, hasHeaderThemeSwitcher) {
@@ -49,26 +48,6 @@ function headerPopupPages(user, popupNavItems, hasHeaderThemeSwitcher) {
           </a>
         </PopupTop>
         {NavMenus.length ? <PopupMain>{NavMenus}</PopupMain> : null}
-      </div>
-    );
-  }
-
-  if (hasHeaderThemeSwitcher) {
-    pages['switch-theme'] = (
-      <div>
-        <PopupTop>
-          <div>
-            <span>
-              <CircleIconButton className="menu-item-icon change-page" data-page-id="main" aria-label="Switch theme">
-                <i className="material-icons">arrow_back</i>
-              </CircleIconButton>
-            </span>
-            <span>Switch theme</span>
-          </div>
-        </PopupTop>
-        <PopupMain>
-          <HeaderThemeSwitcher />
-        </PopupMain>
       </div>
     );
   }

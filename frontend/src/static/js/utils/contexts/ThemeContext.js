@@ -3,6 +3,7 @@ import { BrowserCache } from '../classes/';
 import { addClassname, removeClassname, supportsSvgAsImg } from '../helpers/';
 import { config as mediacmsConfig } from '../settings/config.js';
 import SiteContext from './SiteContext';
+import { isDarkTheme, isThemeMode } from '../settings/themePresets';
 
 const config = mediacmsConfig(window.MediaCMS);
 
@@ -41,7 +42,7 @@ function initLogo(logo) {
 }
 
 function initMode(cachedValue, defaultValue) {
-  return 'light' === cachedValue || 'dark' === cachedValue ? cachedValue : defaultValue;
+  return isThemeMode(cachedValue) ? cachedValue : isThemeMode(defaultValue) ? defaultValue : 'light';
 }
 
 export const ThemeContext = createContext();
@@ -51,20 +52,24 @@ export const ThemeProvider = ({ children }) => {
   const cache = new BrowserCache('MediaCMS[' + site.id + '][theme]', 86400);
   const [themeMode, setThemeMode] = useState(initMode(cache.get('mode'), config.theme.mode));
   const logos = initLogo(config.theme.logo);
-  const [logo, setLogo] = useState(logos[themeMode]);
+  const logo = logos[isDarkTheme(themeMode) ? 'dark' : 'light'];
 
-  const changeMode = () => {
-    setThemeMode('light' === themeMode ? 'dark' : 'light');
+  const changeMode = (mode) => {
+    if (isThemeMode(mode)) {
+      setThemeMode(mode);
+    } else if (mode === undefined) {
+      setThemeMode(isDarkTheme(themeMode) ? 'light' : 'dark');
+    }
   };
 
   useEffect(() => {
-    if ('dark' === themeMode) {
+    if (isDarkTheme(themeMode)) {
       addClassname(document.body, 'dark_theme');
     } else {
       removeClassname(document.body, 'dark_theme');
     }
+    document.body.dataset.theme = themeMode;
     cache.set('mode', themeMode);
-    setLogo(logos[themeMode]);
   }, [themeMode]);
 
   const value = {

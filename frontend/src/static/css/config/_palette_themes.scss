@@ -1,0 +1,146 @@
+// New palettes inherit the existing light/dark component rules, then replace
+// semantic colors so media, account forms, and navigation share one palette.
+@mixin palette($background, $surface, $raised, $text, $muted, $border, $accent, $on-accent, $scheme) {
+  color-scheme: $scheme;
+  --theme-color: #{$accent};
+  --default-theme-color: #{$accent};
+  --default-brand-color: #{$accent};
+  --links-color: #{$accent};
+  --theme-on-accent: #{$on-accent};
+  --dotted-outline-color: #{$accent};
+
+  @each $name in body-bg-color, item-bg-color, profile-page-header-bg-color,
+    playlist-page-bg-color, playlist-view-header-bg-color, playlist-view-actions-bg-color,
+    playlist-view-header-toggle-bg-color, playlist-page-details-bg-color {
+    --#{$name}: #{$background};
+  }
+
+  @each $name in header-bg-color, sidebar-bg-color, popup-bg-color, input-bg-color,
+    search-field-input-bg-color, profile-page-bg-color, profile-page-item-content-title-bg-color,
+    user-action-form-inner-bg-color, user-action-form-inner-input-bg-color,
+    add-media-page-tmplt-dialog-bg-color, add-media-page-tmplt-uploader-bg-color,
+    playlist-page-author-edit-playlist-form-wrap-bg-color, playlist-page-video-list-bg-color,
+    playlist-page-video-list-item-title-bg-color, media-actions-more-options-popup-bg-color,
+    media-actions-share-fullscreen-popup-main-bg-color, media-actions-share-copy-field-bg-color,
+    report-form-field-input-bg-color, share-embed-inner-textarea-bg-color {
+    --#{$name}: #{$surface};
+  }
+
+  @each $name in nav-menu-active-item-bg-color, nav-menu-item-hover-bg-color,
+    in-popup-nav-menu-item-hover-bg-color, search-field-submit-bg-color,
+    search-field-submit-hover-bg-color, popup-top-bg-color, item-thumb-bg-color,
+    playlist-view-status-bg-color, playlist-view-media-bg-color, playlist-view-item-author-bg-color,
+    playlist-page-status-bg-color, playlist-page-actions-circle-icon-bg-color,
+    playlist-page-author-edit-playlist-icon-button-bg-color, playlist-page-video-list-item-hover-bg-color,
+    playlist-page-video-list-item-title-hover-bg-color, media-title-labels-area-bg-color,
+    media-actions-not-popup-circle-icon-focus-bg-color, media-actions-not-popup-circle-icon-active-bg-color,
+    input-disabled-bg-color {
+    --#{$name}: #{$raised};
+  }
+
+  @each $name in hr-color, input-border-color, sidebar-nav-border-color,
+    search-field-input-border-color, search-field-submit-border-color,
+    search-field-submit-hover-border-color, popup-hr-bg-color, comments-textarea-wrapper-border-color,
+    comments-list-inner-border-color, media-list-row-border-color, playlist-privacy-border-color,
+    playlist-form-field-border-color, playlist-save-popup-border-color,
+    playlist-page-author-border-top-color, playlist-page-author-edit-playlist-form-wrap-border-color,
+    media-title-banner-border-color, media-actions-like-before-border-color,
+    media-actions-share-copy-field-border-color, report-form-field-input-border-color,
+    form-actions-bottom-border-top-color, media-content-banner-border-color,
+    share-embed-inner-on-right-border-color, share-embed-inner-textarea-border-color,
+    viewer-sidebar-auto-play-border-bottom-color, user-action-form-inner-title-border-bottom-color,
+    user-action-form-inner-input-border-color {
+    --#{$name}: #{$border};
+  }
+
+  @each $name in body-text-color, input-color, header-popup-menu-color,
+    sidebar-nav-item-text-color, sidebar-bottom-link-color, search-field-input-text-color,
+    search-field-submit-text-color, search-results-item-content-link-title-text-color,
+    popup-top-text-color, popup-msg-title-text-color, comments-textarea-text-color,
+    comment-author-text-color, comment-text-color, item-title-text-color,
+    playlist-form-field-text-color, playlist-save-popup-text-color, playlist-view-title-link-text-color,
+    playlist-view-item-title-text-color, playlist-view-item-author-text-color,
+    profile-page-nav-link-active-text-color, profile-page-nav-link-hover-text-color,
+    playlist-page-title-link-text-color, playlist-page-actions-nav-item-button-text-color,
+    playlist-page-author-name-link-color, playlist-page-author-edit-playlist-form-wrap-text-color,
+    media-actions-share-title-text-color, media-actions-share-options-nav-button-text-color,
+    media-actions-share-copy-field-input-text-color, media-actions-more-options-popup-nav-link-text-color,
+    report-form-title-text-color, report-form-field-label-text-color, report-form-field-input-text-color,
+    media-author-banner-name-text-color, share-embed-inner-on-right-ttl-text-color,
+    share-embed-inner-textarea-text-color, viewer-sidebar-auto-play-next-label-text-color,
+    user-action-form-inner-input-text-color {
+    --#{$name}: #{$text};
+  }
+
+  @each $name in header-circle-button-color, header-popup-menu-icon-color,
+    sidebar-nav-item-icon-color, spinner-loader-color, popup-msg-main-text-color,
+    comments-textarea-text-placeholder-color, comment-date-text-color,
+    comment-actions-material-icon-text-color, comment-actions-likes-num-text-color,
+    comment-actions-reply-button-text-color, comment-actions-cancel-removal-button-text-color,
+    item-meta-text-color, item-meta-link-text-color, item-list-load-more-text-color,
+    media-list-header-title-link-text-color, playlist-item-main-view-full-link-text-color,
+    playlist-form-cancel-button-text-color, playlist-view-header-toggle-text-color,
+    playlist-view-meta-text-color, playlist-view-meta-link-color, playlist-view-status-text-color,
+    playlist-view-status-icon-text-color, playlist-view-media-order-number-color,
+    profile-page-info-videos-number-text-color, profile-page-nav-link-text-color,
+    playlist-page-details-text-color, playlist-page-actions-circle-icon-text-color,
+    playlist-page-status-text-color, playlist-page-status-icon-text-color,
+    playlist-page-author-edit-playlist-icon-button-text-color, playlist-page-video-list-item-order-text-color,
+    media-title-labels-area-text-color, media-title-views-text-color,
+    report-form-help-text-color, media-author-banner-date-text-color, media-status-info-item-text-color,
+    viewer-sidebar-auto-play-option-text-color {
+    --#{$name}: #{$muted};
+  }
+
+  --profile-page-nav-link-active-after-bg-color: #{$accent};
+  --comment-text-mentions-background-color-highlight: #{$raised};
+
+  // Filled primary controls need the inverse foreground on bright dark-mode accents.
+  .button-link:not(.sign-in), .primaryAction, .media-drag-drop-content-inner .browse-files-btn-wrap span,
+  .comments-form-inner .form .form-buttons a,
+  .comments-form-inner .form .form-buttons button,
+  .comment-actions .remove-comment > button,
+  .media-author-actions > a, .media-author-actions > button,
+  .profile-page-header a.edit-channel, .profile-page-header a.edit-profile,
+  .profile-page-header button.delete-profile,
+  .profile-banner-wrap .popup-message-bottom > a,
+  .profile-banner-wrap .popup-message-bottom > button,
+  .user-action-form-inner button, .user-action-form-inner [type='submit'],
+  .user-action-form-inner [type='button'],
+  .media-upload-item-bottom-actions > :hover, .retry-media-upload-item:hover {
+    color: $on-accent;
+  }
+}
+
+// Pastel gradients remain beneath solid, readable text and form surfaces.
+body[data-theme='aurora'] {
+  @include palette(#f5f1fa, #fffafd, #eee5f5, #352d46, #71637c, #d6c8e0, #7353a3, #ffffff, light);
+  --page-wash: radial-gradient(ellipse at 0% 0%, #e5def7 0%, transparent 58%), radial-gradient(ellipse at 100% 20%, #f7e0ed 0%, transparent 55%), linear-gradient(145deg, #f8f3fc, #e9effb);
+  --shell-wash: linear-gradient(120deg, #f3ecfa, #fcf0f5 65%, #eef2fc);
+}
+
+body[data-theme='blossom'] {
+  @include palette(#fff4ee, #fffaf7, #f6e4df, #472e32, #7c6264, #e4c7c4, #a34f59, #ffffff, light);
+  --page-wash: radial-gradient(ellipse at 0% 0%, #f8dfca 0%, transparent 58%), radial-gradient(ellipse at 100% 30%, #f8deea 0%, transparent 55%), linear-gradient(145deg, #fff6ed, #fff1ef);
+  --shell-wash: linear-gradient(120deg, #fff0e3, #fff1f3 65%, #fff6e8);
+}
+
+body[data-theme='lagoon'] {
+  @include palette(#eef7fa, #f8fdff, #deedf1, #253d49, #587480, #bcd5df, #236f86, #ffffff, light);
+  --page-wash: radial-gradient(ellipse at 0% 0%, #d2e8fa 0%, transparent 58%), radial-gradient(ellipse at 100% 30%, #d9f0e9 0%, transparent 55%), linear-gradient(145deg, #f0f9ff, #e9eefb);
+  --shell-wash: linear-gradient(120deg, #e8f3fe, #edfaf5 65%, #eff2fc);
+}
+
+body[data-theme='meadow'] {
+  @include palette(#f4f7ed, #fcfdf7, #e6eddc, #34402b, #69755d, #ccd5bd, #526f36, #ffffff, light);
+  --page-wash: radial-gradient(ellipse at 0% 0%, #e0ebd4 0%, transparent 58%), radial-gradient(ellipse at 100% 30%, #f7edce 0%, transparent 55%), linear-gradient(145deg, #f5f9ed, #edf5ef);
+  --shell-wash: linear-gradient(120deg, #eef5e6, #fcf7e5 65%, #f0f7ed);
+}
+
+body[data-theme='aurora'], body[data-theme='blossom'], body[data-theme='lagoon'], body[data-theme='meadow'] {
+  background-image: var(--page-wash);
+  background-attachment: fixed;
+  --item-bg-color: transparent;
+
+  .page-header, .page-sidebar { background-image: var(--shell-wash); }
+}

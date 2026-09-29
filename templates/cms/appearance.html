@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block headtitle %}Appearance - {{PORTAL_NAME}}{% endblock headtitle %}
+{% block content %}<div id="page-appearance"></div>{% endblock %}
+{% block bottomimports %}
+<script src="{% static 'js/appearance.js' %}?v={{ VERSION }}"></script>
+{% endblock bottomimports %}

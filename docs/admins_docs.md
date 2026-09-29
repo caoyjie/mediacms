@@ -184,6 +184,25 @@ Docker Compose installation: edit `deploy/docker/local_settings.py`, make a chan
 ### 5.1 Change portal logo
 
 Find the default svg files for the white theme on `static/images/logo_dark.svg` and for the dark theme on `static/images/logo_light.svg`
+
+### Appearance themes
+
+Set `DEFAULT_THEME` in `cms/local_settings.py` to `light`, `dark`, `aurora`,
+`blossom`, `lagoon`, or `meadow`. The four gradient themes combine lilac/blush,
+peach/rose, sky/mint, and sage/cream respectively. They use light-mode logos;
+Dark retains its dark-mode logo. The previous Ocean, Forest, Sandstone, and
+Lavender palettes are retired; saved retired selections fall back to the
+configured default (or Light if that default is also retired).
+
+Visitors open the dedicated `/appearance` page from a single Appearance link
+in the sidebar or header menu. The page provides previews and instant selection. Configure
+`theme.switch.position` (`header` or `sidebar`) and `theme.switch.enabled`
+in `templates/config/installation/site.html` (or the matching frontend demo
+configuration). Selections use the existing per-site browser
+cache (24 hours, refreshed when the theme is applied). A saved selection takes
+precedence over the default; invalid selections fall back to the configured
+default. Rebuild the frontend and publish its static assets after updating
+theme source files.
 You can specify new svg paths to override by editing the `PORTAL_LOGO_DARK_SVG` and `PORTAL_LOGO_LIGHT_SVG` variables in `settings.py`.
 
 You can also use custom pngs, by setting the variables `PORTAL_LOGO_DARK_PNG` and `PORTAL_LOGO_LIGHT_PNG` in `settings.py`. The svg files have priority over png files, so if both are set, svg files will be used.

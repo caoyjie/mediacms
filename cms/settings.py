@@ -22,7 +22,7 @@ CAN_COMMENT = "all"
 # valid choices here are 'public', 'private', 'unlisted
 PORTAL_WORKFLOW = "public"
 
-# valid values: 'light', 'dark'.
+# valid values: 'light', 'dark', 'aurora', 'blossom', 'lagoon', 'meadow'.
 DEFAULT_THEME = "light"
 
 

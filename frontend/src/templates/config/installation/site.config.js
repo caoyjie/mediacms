@@ -7,7 +7,7 @@ module.exports = {
   useRoundedCorners: true,
   version: '1.0.0',
   theme: {
-    mode: 'light', // Valid values: 'light', 'dark'.
+    mode: 'light', // light, dark, aurora, blossom, lagoon, meadow.
     switch: {
       position: 'sidebar', // Valid values: 'header', 'sidebar'.
     },

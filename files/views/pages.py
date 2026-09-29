@@ -186,6 +186,11 @@ def edit_subtitle(request):
     return render(request, "cms/edit_subtitle.html", context)
 
 
+def appearance(request):
+    """Personal appearance preferences, stored in the visitor's browser."""
+    return render(request, "cms/appearance.html")
+
+
 def categories(request):
     """List categories view"""
 

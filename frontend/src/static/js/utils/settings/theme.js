@@ -1,8 +1,10 @@
+import { isThemeMode } from './themePresets';
+
 let THEME = null;
 
 export function init(theme, logo) {
   THEME = {
-    mode: 'light', // Valid options: 'light', 'dark'.
+    mode: 'light',
     switch: {
       enabled: true,
       position: 'header', // Valid options: 'header', 'sidebar'.
@@ -22,7 +24,7 @@ export function init(theme, logo) {
   if (void 0 !== theme) {
     if ('string' === typeof theme.mode) {
       THEME.mode = theme.mode.trim();
-      THEME.mode = 'dark' === THEME.mode ? 'dark' : 'light';
+      THEME.mode = isThemeMode(THEME.mode) ? THEME.mode : 'light';
     }
 
     if (void 0 !== theme.switch) {

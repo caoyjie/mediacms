@@ -7,6 +7,18 @@ const themeConfig = (theme?: any, logo?: any) => {
 
 describe('utils/settings', () => {
     describe('theme', () => {
+        test.each(['aurora', 'blossom', 'lagoon', 'meadow'])('Accepts %s as the configured theme', (mode) => {
+            expect(themeConfig({ mode: ` ${mode} ` }).mode).toBe(mode);
+        });
+
+        test.each(['ocean', 'forest', 'sandstone', 'lavender'])('Retires the old %s palette', (mode) => {
+            expect(themeConfig({ mode }).mode).toBe('light');
+        });
+
+        test('Falls back safely for an unknown theme', () => {
+            expect(themeConfig({ mode: 'unknown' }).mode).toBe('light');
+        });
+
         test('Applies defaults when no inputs provided', () => {
             const cfg = themeConfig();
             expect(cfg).toStrictEqual({

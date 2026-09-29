@@ -48,14 +48,11 @@ function popupMiddleNavItems() {
 
   if (hasThemeSwitcher) {
     items.push({
-      itemType: 'open-subpage',
-      icon: 'brightness_4',
+      itemType: 'link',
+      link: links.appearance,
+      icon: 'palette',
       iconPos: 'left',
-      text: 'Switch theme',
-      buttonAttr: {
-        className: 'change-page',
-        'data-page-id': 'switch-theme',
-      },
+      text: 'Appearance',
     });
   }
 

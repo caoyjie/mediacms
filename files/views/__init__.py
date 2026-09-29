@@ -12,6 +12,7 @@ from .media import MediaSearch  # noqa: F401
 from .media import media_share  # noqa: F401
 from .media_auth import media_auth  # noqa: F401
 from .pages import about  # noqa: F401
+from .pages import appearance  # noqa: F401
 from .pages import add_subtitle  # noqa: F401
 from .pages import approval_required  # noqa: F401
 from .pages import categories  # noqa: F401
