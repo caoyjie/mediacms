@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react';
+import { createProgressAdapter } from '../../utils/playback/ProgressAdapter';
 
 /**
  * VideoJSEmbed - A React component that embeds the MediaCMS video js
@@ -51,6 +52,9 @@ const VideoJSEmbed = ({
     const assetsLoadedRef = useRef(false);
     const playerInstanceRef = useRef(null);
     const inEmbedRef = useRef(inEmbed);
+    const progressRef = useRef({ key: null, adapter: null });
+
+    useEffect(() => () => progressRef.current.adapter?.dispose(), []);
 
     // Helper function to get URL parameters
     const getUrlParameter = (name) => {
@@ -71,8 +75,21 @@ const VideoJSEmbed = ({
             const urlShowUserAvatar = getUrlParameter('showUserAvatar');
             const urlLinkTitle = getUrlParameter('linkTitle');
             
+            const progressKey = `${inEmbed}:${data?.url}:${data?.content_revision}`;
+            if (progressRef.current.key !== progressKey) {
+                progressRef.current.adapter?.dispose();
+                progressRef.current = {
+                    key: progressKey,
+                    adapter: createProgressAdapter({
+                        data, inEmbed,
+                        isWatchPage: window.parent === window && /\/(view|media\.html)\/?$/.test(window.location.pathname),
+                    }),
+                };
+            }
+            const playbackProgress = progressRef.current.adapter;
             window.MEDIA_DATA = {
-                data: data || {}, 
+                data: data || {},
+                playbackProgress,
                 useRoundedCorners: useRoundedCorners,
                 version: version,
                 isPlayList: isPlayList,
@@ -101,7 +118,7 @@ const VideoJSEmbed = ({
                 hasPreviousLink: hasPreviousLink || false,
                 errorMessage: errorMessage || '',
                 // URL parameters
-                urlTimestamp: urlTimestamp ? parseInt(urlTimestamp, 10) : null,
+                urlTimestamp: urlTimestamp !== null && urlTimestamp.trim() !== '' && Number.isFinite(Number(urlTimestamp)) && Number(urlTimestamp) >= 0 ? Number(urlTimestamp) : null,
                 urlMuted: urlMuted === '1',
                 urlShowRelated: urlShowRelated === '1' || urlShowRelated === 'true',
                 urlShowUserAvatar: urlShowUserAvatar === '1' || urlShowUserAvatar === 'true',

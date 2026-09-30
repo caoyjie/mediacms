@@ -6,9 +6,11 @@ import { MediaDurationInfo } from '../../utils/classes/';
 import { MediaPlaylistOptions } from '../media-playlist-options/MediaPlaylistOptions';
 import { MediaItemDuration, MediaItemPlaylistIndex, itemClassname } from './includes/items/';
 import { MediaItem } from './MediaItem';
+import { useMediaProgress, MediaProgressBar, MediaProgressDescription } from './MediaProgress';
 
 export function MediaItemAudio(props) {
   const type = props.type;
+  const progress = useMediaProgress(props);
   const isSelectMediaMode = inSelectMediaEmbedMode();
 
   const [titleComponentOrig, descriptionComponent, thumbnailUrl, UnderThumbWrapperOrig, editMediaComponent, metaComponents, viewMediaComponent] =
@@ -46,6 +48,7 @@ export function MediaItemAudio(props) {
           className={'item-thumb' + (!thumbnailUrl ? ' no-thumb' : '')}
           style={!thumbnailUrl ? null : { backgroundImage: "url('" + thumbnailUrl + "')" }}
         >
+          <MediaProgressBar progress={progress} />
           {props.inPlaylistView ? null : (
             <MediaItemDuration ariaLabel={duration} time={durationISO8601} text={durationStr} />
           )}
@@ -65,6 +68,7 @@ export function MediaItemAudio(props) {
 
     return (
       <a {...attr}>
+        <MediaProgressBar progress={progress} />
         {props.inPlaylistView ? null : (
           <MediaItemDuration ariaLabel={duration} time={durationISO8601} text={durationStr} />
         )}
@@ -123,6 +127,7 @@ export function MediaItemAudio(props) {
       {playlistOrderNumberComponent()}
 
       <div className="item-content">
+        <MediaProgressDescription progress={progress} />
         {props.showSelection && (
           <div className="item-selection-checkbox" onClick={(e) => e.stopPropagation()}>
             <input

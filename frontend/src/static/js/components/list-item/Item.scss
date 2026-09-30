@@ -804,3 +804,25 @@ a.item-edit-link {
 .item.with-selection:hover .item-view-icon {
   opacity: 1;
 }
+
+// Resume progress sits above previews at the thumbnail's bottom edge.
+.media-progress-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 3px;
+  background: #e53935;
+  z-index: 4;
+  pointer-events: none;
+}
+.media-progress-description {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

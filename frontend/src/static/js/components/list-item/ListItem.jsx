@@ -218,6 +218,8 @@ export function listItemProps(props, item, index) {
 
   if ('video' === type || 'audio' === type) {
     args.duration = item.duration;
+    args.mediaId = item.friendly_token;
+    args.contentRevision = item.content_revision;
   }
 
   if ((isArchiveItem || isPlaylistItem) && !isNaN(item.media_count)) {
@@ -246,6 +248,8 @@ export function ListItem(props) {
 
   const args = {
     order: props.order,
+    mediaId: props.mediaId,
+    contentRevision: props.contentRevision,
     title: props.title,
     link: props.url.view,
     thumbnail: props.thumbnail,

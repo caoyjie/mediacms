@@ -95,6 +95,11 @@ def handle_pending_running_encodings(media):
 
 
 def pre_trim_video_actions(media):
+    # In-place edits invalidate resume positions even when the filename is unchanged.
+    import uuid
+
+    media.content_revision = uuid.uuid4()
+    Media.objects.filter(pk=media.pk).update(content_revision=media.content_revision)
     # the reason for this function is to perform tasks before trimming a video
 
     # avoid re-running unnecessary encodings (or chunkize_media, which is the first step for them)

@@ -50,3 +50,31 @@ class MediaAction(models.Model):
             models.Index(fields=["user", "action", "-action_date"]),
             models.Index(fields=["session_key", "action"]),
         ]
+
+
+class PlaybackProgress(models.Model):
+    """Latest position, independent of visit history and session ownership."""
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    media = models.ForeignKey(Media, on_delete=models.CASCADE)
+    content_revision = models.UUIDField()
+    position = models.FloatField(default=0)
+    duration = models.FloatField(default=0)
+    completed = models.BooleanField(default=False)
+    updated_at = models.DateTimeField(null=True)
+    generation = models.PositiveBigIntegerField(default=0)
+    sequence = models.PositiveBigIntegerField(default=0)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['user', 'media'], name='unique_user_media_progress')]
+
+
+class PlaybackSession(models.Model):
+    """Claim receipts make retries idempotent, even after another session wins."""
+
+    progress = models.ForeignKey(PlaybackProgress, on_delete=models.CASCADE, related_name='sessions')
+    session_id = models.UUIDField()
+    generation = models.PositiveBigIntegerField()
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['progress', 'session_id'], name='unique_progress_session')]

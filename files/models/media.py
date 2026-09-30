@@ -59,6 +59,8 @@ class Media(models.Model):
 
     duration = models.IntegerField(default=0)
 
+    content_revision = models.UUIDField(default=uuid.uuid4, editable=False)
+
     edit_date = models.DateTimeField(auto_now=True)
 
     enable_comments = models.BooleanField(default=True, help_text="Whether comments will be allowed for this media")
@@ -268,6 +270,9 @@ class Media(models.Model):
 
             # check case where another media file was uploaded
             if self.media_file != self.__original_media_file:
+                self.content_revision = uuid.uuid4()
+                if kwargs.get('update_fields') is not None:
+                    kwargs['update_fields'] = set(kwargs['update_fields']) | {'content_revision'}
                 # set this otherwise gets to infinite loop
                 self.__original_media_file = self.media_file
                 from .. import tasks

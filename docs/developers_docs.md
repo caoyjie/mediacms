@@ -153,3 +153,41 @@ docker compose exec --env TESTING=True -T web pytest --cov=. --cov-report=html
 ```
 
 and of course...you are very welcome to help us increase it ;)
+
+### Playback progress
+
+Standalone watch pages save progress for seekable video and audio. Guests use
+site-scoped local storage; signed-in users use the authenticated API. Guest
+progress is never imported at login. Embedded players and thumbnail previews do
+not participate.
+
+- `GET /api/v1/playback-progress?media=token1,token2` returns a map of saved
+  progress for accessible media (at most 100 distinct tokens).
+- `POST /api/v1/media/<token>/playback-session` accepts `session_id` (a client
+  UUID) and `content_revision` (from the media API), returning `generation`.
+  Retry the same ID after a transport failure. A new session takes ownership
+  without clearing the previous position.
+- `PUT /api/v1/media/<token>/playback-progress` accepts `session_id`, `generation`,
+  `content_revision`, positive increasing `sequence`, `position` and `duration`
+  in seconds, and boolean `ended`. The response contains `position`, `duration`,
+  `completed`, `content_revision`, and `updated_at`. The server clamps to its
+  known duration; old revisions, superseded sessions, and older/duplicate
+  sequences return 409. Reload before reclaiming a superseded session.
+
+These endpoints derive identity from authentication and enforce media-view
+permissions. Session-authenticated writes require CSRF. The frontend also sends
+`X-Playback-User` with its URL-encoded original username so an old tab cannot read or claim
+progress for a subsequently signed-in account; the header never authenticates a
+request. Responses are private and must not be cached by a CDN.
+
+The player saves every five seconds, on pause/seek/end, and best-effort on page
+hide. URL timestamps take precedence, including `t=0`. Completed media reopens at
+zero; its full red bar persists until replay advances. A source replacement or
+in-place trim changes `content_revision`; metadata changes do not. Processing
+that changes media content through any new path must also change this revision.
+
+Deployment order: apply the `files` and `actions` migrations, publish both
+frontend bundles, then restart application workers. Build the main frontend with
+`npm run dist --prefix frontend` and copy `frontend/dist/static/` into `static/`.
+Build the player with `npm run build:django --prefix frontend-tools/video-js`.
+Both generated bundles are checked into `static/` in this repository.

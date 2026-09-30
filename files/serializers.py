@@ -9,6 +9,7 @@ from .models import Category, Comment, EncodeProfile, Media, Playlist, Tag
 
 class MediaSerializer(serializers.ModelSerializer):
     # to be used in APIs as show related media
+    content_revision = serializers.UUIDField(read_only=True)
     user = serializers.ReadOnlyField(source="user.username")
     url = serializers.SerializerMethodField()
     api_url = serializers.SerializerMethodField()
@@ -53,6 +54,7 @@ class MediaSerializer(serializers.ModelSerializer):
             "featured",
         )
         fields = (
+            "content_revision",
             "friendly_token",
             "url",
             "api_url",
@@ -119,6 +121,7 @@ class CategoriesInfoMixin(serializers.Serializer):
 
 
 class SingleMediaSerializer(CategoriesInfoMixin, serializers.ModelSerializer):
+    content_revision = serializers.UUIDField(read_only=True)
     user = serializers.ReadOnlyField(source="user.username")
     url = serializers.SerializerMethodField()
     is_shared = serializers.SerializerMethodField()
@@ -152,6 +155,7 @@ class SingleMediaSerializer(CategoriesInfoMixin, serializers.ModelSerializer):
             "is_reviewed",
         )
         fields = (
+            "content_revision",
             "url",
             "user",
             "title",

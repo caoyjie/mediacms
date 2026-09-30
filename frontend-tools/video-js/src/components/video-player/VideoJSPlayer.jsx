@@ -981,7 +981,7 @@ function VideoJSPlayer({ videoId = 'default-video', showTitle = true, showRelate
                     // Player dimensions - removed for responsive design
                     // Autoplay behavior: Try unmuted first, fallback to muted if needed
                     // For embed players, disable autoplay to show poster
-                    autoplay: isEmbedPlayer ? false : true, // Try unmuted autoplay first (true/false, play, muted, any)
+                    autoplay: isEmbedPlayer || mediaData.playbackProgress ? false : true, // Try unmuted autoplay first (true/false, play, muted, any)
 
                     // Start video over when it ends
                     loop: false,
@@ -1323,33 +1323,42 @@ function VideoJSPlayer({ videoId = 'default-video', showTitle = true, showRelate
                         mediaData.onPlayerInitCallback({ player: playerRef.current }, playerRef.current.el());
                     }
 
-                    // Handle URL timestamp parameter
-                    if (finalTimestamp !== null && finalTimestamp >= 0) {
-                        const timestamp = finalTimestamp;
+                    if (mediaData.playbackProgress && !isEmbedPlayer) {
+                        // The outer bridge owns cleanup; StrictMode replays this effect's
+                        // cleanup while retaining the existing Video.js instance.
+                        mediaData.playbackProgress.attach(
+                            playerRef.current, finalTimestamp, () => autoplayHandler.handleAutoplay()
+                        );
+                    } else {
+                        // Handle URL timestamp parameter
+                        if (finalTimestamp !== null && finalTimestamp >= 0) {
+                            const timestamp = finalTimestamp;
 
-                        // Wait for video metadata to be loaded before seeking
-                        if (playerRef.current.readyState() >= 1) {
-                            // Metadata is already loaded, seek immediately
-                            if (timestamp < playerRef.current.duration()) {
-                                playerRef.current.currentTime(timestamp);
-                            } else if (timestamp >= 0) {
-                                playerRef.current.play();
-                            }
-                        } else {
-                            // Wait for metadata to load
-                            playerRef.current.one('loadedmetadata', () => {
-                                if (timestamp >= 0 && timestamp < playerRef.current.duration()) {
+                            // Wait for video metadata to be loaded before seeking
+                            if (playerRef.current.readyState() >= 1) {
+                                // Metadata is already loaded, seek immediately
+                                if (timestamp < playerRef.current.duration()) {
                                     playerRef.current.currentTime(timestamp);
                                 } else if (timestamp >= 0) {
                                     playerRef.current.play();
                                 }
-                            });
+                            } else {
+                                // Wait for metadata to load
+                                playerRef.current.one('loadedmetadata', () => {
+                                    if (timestamp >= 0 && timestamp < playerRef.current.duration()) {
+                                        playerRef.current.currentTime(timestamp);
+                                    } else if (timestamp >= 0) {
+                                        playerRef.current.play();
+                                    }
+                                });
+                            }
                         }
-                    }
 
-                    // Skip autoplay for embed players to show poster
-                    if (!isEmbedPlayer) {
-                        autoplayHandler.handleAutoplay();
+                        // Skip autoplay for embed players to show poster
+                        if (!isEmbedPlayer) {
+                            autoplayHandler.handleAutoplay();
+                        }
+
                     }
 
                     const setupMobilePlayPause = () => {
@@ -2369,7 +2378,7 @@ function VideoJSPlayer({ videoId = 'default-video', showTitle = true, showRelate
             //}, 0);
         }
 
-        // Cleanup: Remove context menu event listener
+        // Cleanup: Remove context menu event listeners (progress is owned by the bridge).
         return () => {
             if (playerRef.current && playerRef.current.el()) {
                 const playerEl = playerRef.current.el();

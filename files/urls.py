@@ -6,6 +6,7 @@ from django.urls import path, re_path
 
 from . import management_views, tinymce_handlers, views
 from .feeds import IndexRSSFeed, SearchRSSFeed
+from .views.playback_progress import PlaybackProgressList, PlaybackProgressSave, PlaybackSessionClaim
 
 friendly_token = r"(?P<friendly_token>[\w\-_]*)"
 
@@ -53,6 +54,9 @@ urlpatterns = [
     re_path(r"^view", views.view_media, name="get_media"),
     re_path(r"^upload", views.upload_media, name="upload_media"),
     # API VIEWS
+    path('api/v1/playback-progress', PlaybackProgressList.as_view()),
+    path('api/v1/media/<str:friendly_token>/playback-session', PlaybackSessionClaim.as_view()),
+    path('api/v1/media/<str:friendly_token>/playback-progress', PlaybackProgressSave.as_view()),
     re_path(r"^api/v1/media/user/bulk_actions$", views.MediaBulkUserActions.as_view()),
     re_path(r"^api/v1/media/user/bulk_actions/$", views.MediaBulkUserActions.as_view()),
     re_path(r"^api/v1/media$", views.MediaList.as_view()),
