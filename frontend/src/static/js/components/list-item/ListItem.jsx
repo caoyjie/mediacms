@@ -9,6 +9,7 @@ import { MediaItem as AttachmentItem } from './MediaItem';
 import { PlaylistItem } from './PlaylistItem';
 import { TaxonomyItem } from './TaxonomyItem';
 import { UserItem } from './UserItem';
+import { mediaDisplayTitle } from '../../utils/helpers/mediaDisplayTitle';
 
 function extractPlaylistId() {
   let playlistId = null;
@@ -250,7 +251,10 @@ export function ListItem(props) {
     order: props.order,
     mediaId: props.mediaId,
     contentRevision: props.contentRevision,
-    title: props.title,
+    title:
+      props.taxonomyPage.current || props.type === 'user' || props.type === 'playlist'
+        ? props.title
+        : mediaDisplayTitle(props.title),
     link: props.url.view,
     thumbnail: props.thumbnail,
     publish_date: props.date,
