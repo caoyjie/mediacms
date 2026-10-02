@@ -81,3 +81,50 @@ test('does not load markdown images and renders malformed input without errors o
         expect(error).not.toHaveBeenCalled();
     } finally { error.mockRestore(); }
 });
+
+test.each([
+    ['javascript', 'const message = "hello";', '.hljs-keyword', 'const'],
+    ['JS', 'const message = "hello";', '.hljs-string', '"hello"'],
+    ['python', 'def greet():\n    return "hello"', '.hljs-keyword', 'def'],
+    ['py', 'print("hello")', '.hljs-string', '"hello"'],
+    ['json', '{"message": "hello"}', '.hljs-attr', '"message"'],
+    ['bash', 'echo "hello"', '.hljs-string', '"hello"'],
+    ['sql', 'SELECT name FROM users;', '.hljs-keyword', 'SELECT'],
+    ['typescript', 'const count: number = 42;', '.hljs-keyword', 'const'],
+])('highlights fenced %s code while preserving its source', (language, code, selector, token) => {
+    render('```' + language + '\n' + code + '\n```');
+    expect(container.querySelector('pre code').textContent).toBe(code + '\n');
+    expect(container.querySelector('pre code').classList.contains('hljs')).toBe(true);
+    expect(container.querySelector(selector).textContent).toBe(token);
+});
+
+test('uses only the language token and ignores fence metadata', () => {
+    render('```js title="example.js"\nconst value = 1;\n```');
+    expect(container.querySelector('.hljs-keyword').textContent).toBe('const');
+    expect(container.querySelector('[title]')).toBeNull();
+});
+
+test.each(['', 'unknown-language', 'text', 'plaintext', 'js"onmouseover="alert(1)'])(
+    'renders %j fences as plain text without throwing', language => {
+        render('```' + language + '\nconst value = "01:30"; <script>evil()</script>\n```');
+        const code = container.querySelector('pre code');
+        expect(code.textContent).toBe('const value = "01:30"; <script>evil()</script>\n');
+        expect(code.querySelector('span,a,script')).toBeNull();
+    }
+);
+
+test('highlighted HTML and timestamps remain inert source code', () => {
+    const source = '<script>alert("01:30")</script>\n<img src=x onerror=alert(1)>\n<span class="hljs-keyword">&amp;</span>';
+    render('```html\n' + source + '\n```\n\n01:30');
+    expect(container.querySelector('pre code').textContent).toBe(source + '\n');
+    expect(container.querySelector('pre .hljs-name')).not.toBeNull();
+    expect(container.querySelector('pre script,pre img,pre a,[onerror]')).toBeNull();
+    expect(container.querySelectorAll('.video-timestamp')).toHaveLength(1);
+});
+
+test('inline and indented code remain plain text', () => {
+    render('`const value = 1;`\n\n    const value = 1;\n');
+    expect(container.querySelectorAll('code')).toHaveLength(2);
+    expect(container.querySelector('code span')).toBeNull();
+    expect(container.querySelector('pre code span')).toBeNull();
+});

@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import MarkdownIt from 'markdown-it';
+import DescriptionCode from './DescriptionCode';
 
 const markdown = new MarkdownIt({ html: false, breaks: true, linkify: false, typographer: false })
     .disable(['image', 'table', 'strikethrough']);
@@ -62,7 +63,7 @@ function renderTokens(tokens, keyPrefix, insideLink = false) {
         } else if (token.type === 'code_inline') {
             parent.children.push(<code key={key}>{token.content}</code>);
         } else if (token.type === 'fence' || token.type === 'code_block') {
-            parent.children.push(<pre key={key}><code>{token.content}</code></pre>);
+            parent.children.push(<DescriptionCode key={key} source={token.content} info={token.type === 'fence' ? token.info : ''} />);
         } else if (token.type === 'softbreak' || token.type === 'hardbreak') {
             parent.children.push(<br key={key} />);
         } else if (token.type === 'hr') {
