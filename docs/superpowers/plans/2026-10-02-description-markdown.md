@@ -1,12 +1,12 @@
 # Media Description Markdown Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans or, if selected by the user, superpowers:subagent-driven-development to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans or, if selected by the user, superpowers:subagent-driven-development to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 仅为媒体播放页的 `description` 增加安全 Markdown 展示，保留原文编辑及时间戳跳转。
 
 **Architecture:** 使用 markdown-it 解析 description，在独立 React 组件内将受支持的 token 转为 React 元素；只在非链接的普通文本中生成时间戳锚点。后端保存 Markdown 原文，在 HTML 和 JSON 输出边界分别转义，不保存渲染结果。
 
-**Tech Stack:** 现有 React 17、Webpack、Jest/jsdom、Django/DRF、pytest；新增 markdown-it（14.x，最低 14.1.0，npm lock 固定实际版本）。不升级 React 或测试框架。
+**Tech Stack:** 现有 React 17、Webpack、Jest/jsdom、Django/DRF、pytest；新增 markdown-it（14.x，最低 14.1.0，yarn.lock 固定实际版本）。不升级 React 或测试框架。
 
 **Spec:** [GitHub issue #4](https://github.com/caoyjie/mediacms/issues/4) 及本会话确认的设计。用户明确范围仅限 `description`；验收仅限桌面浏览器，无手机浏览器或原生 App 验收。以下 Global Constraints 是执行时使用的完整范围约束。
 
@@ -143,3 +143,5 @@
 - 实际编辑页保存并重新打开，缩进、代码、尾随空格和末尾换行均保留；播放页格式保持正确。
 - 最终自审检查：链接协议及控制字符、嵌套链接/代码时间戳、API/表单源码、JSON-LD 转义、主题与溢出；未发现新增阻断问题。
 - 未修改 summary 或评论。暂不合并、推送或部署，保留分支供审阅。
+
+- npm 官方 audit：新增 Markdown 依赖闭包无公告；既有生产依赖共报告 28 项（3 moderate、24 high、1 critical），本次未扩展到依赖全面升级。
