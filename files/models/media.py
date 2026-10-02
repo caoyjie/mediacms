@@ -244,7 +244,8 @@ class Media(models.Model):
         if not self.title:
             self.title = self.media_file.path.split("/")[-1]
 
-        strip_text_items = ["title", "description"]
+        # Descriptions store Markdown source; escape at the rendering boundary.
+        strip_text_items = ["title"]
         for item in strip_text_items:
             setattr(self, item, strip_tags(getattr(self, item, None)))
         self.title = self.title[:100]

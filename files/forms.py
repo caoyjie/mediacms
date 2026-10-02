@@ -58,6 +58,7 @@ class MediaMetadataForm(forms.ModelForm):
     def __init__(self, user, *args, **kwargs):
         self.user = user
         super(MediaMetadataForm, self).__init__(*args, **kwargs)
+        self.fields["description"].strip = False
         if not getattr(settings, 'ALLOW_CUSTOM_MEDIA_URLS', False):
             self.fields.pop("friendly_token")
         if self.instance.media_type != "video":

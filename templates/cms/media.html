@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load static %}
+{% load static custom_filters %}
 
 {% block headtitle %}{{media_object.title}} - {{PORTAL_NAME}}{% endblock headtitle %}
 
@@ -34,7 +34,7 @@
         "@type": "VideoObject",
         "name": "{{media_object.title}} - {{PORTAL_NAME}}",
         "url": "{{FRONTEND_HOST}}{{media_object.get_absolute_url}}",
-        "description": "{% if media_object.summary %}{{media_object.summary}}{% else %}{{media_object.description}}{% endif %}",
+        "description": {% if media_object.summary %}{{media_object.summary|json_string}}{% else %}{{media_object.description|json_string}}{% endif %},
         "thumbnailUrl": [
             "{{FRONTEND_HOST}}{{media_object.poster_url}}"
         ],
@@ -61,7 +61,7 @@
         "@type": "AudioObject",
         "name": "{{media_object.title}} - {{PORTAL_NAME}}",
         "url": "{{FRONTEND_HOST}}{{media_object.get_absolute_url}}",
-        "description": "{% if media_object.summary %}{{media_object.summary}}{% else %}{{media_object.description}}{% endif %}",
+        "description": {% if media_object.summary %}{{media_object.summary|json_string}}{% else %}{{media_object.description|json_string}}{% endif %},
         "uploadDate": "{{media_object.add_date}}",
         "dateModified": "{{media_object.edit_date}}",
         "duration": "T{{media_object.duration}}S",
@@ -84,7 +84,7 @@
         "@type": "ImageObject",
         "name": "{{media_object.title}} - {{PORTAL_NAME}}",
         "url": "{{FRONTEND_HOST}}{{media_object.get_absolute_url}}",
-        "description": "{% if media_object.summary %}{{media_object.summary}}{% else %}{{media_object.description}}{% endif %}",
+        "description": {% if media_object.summary %}{{media_object.summary|json_string}}{% else %}{{media_object.description|json_string}}{% endif %},
         "uploadDate": "{{media_object.add_date}}",
         "dateModified": "{{media_object.edit_date}}",
         "potentialAction": {
@@ -104,7 +104,7 @@
         "@type": "MediaObject",
         "name": "{{media_object.title}} - {{PORTAL_NAME}}",
         "url": "{{FRONTEND_HOST}}{{media_object.get_absolute_url}}",
-        "description": "{% if media_object.summary %}{{media_object.summary}}{% else %}{{media_object.description}}{% endif %}",
+        "description": {% if media_object.summary %}{{media_object.summary|json_string}}{% else %}{{media_object.description|json_string}}{% endif %},
         "uploadDate": "{{media_object.add_date}}",
         "dateModified": "{{media_object.edit_date}}",
         "potentialAction": {

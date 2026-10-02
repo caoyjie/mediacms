@@ -8,6 +8,7 @@ from .models import Category, Comment, EncodeProfile, Media, Playlist, Tag
 
 
 class MediaSerializer(serializers.ModelSerializer):
+    description = serializers.CharField(required=False, allow_blank=True, trim_whitespace=False)
     # to be used in APIs as show related media
     content_revision = serializers.UUIDField(read_only=True)
     user = serializers.ReadOnlyField(source="user.username")
