@@ -6,6 +6,7 @@ import { PageActions, MediaPageActions } from '../../utils/actions/';
 import { formatInnerLink, inEmbeddedApp, publishedOnDate } from '../../utils/helpers/';
 import { PopupMain } from '../_shared/';
 import CommentsList from '../comments/Comments';
+import MediaDescription from './MediaDescription';
 import { replaceString } from '../../utils/helpers/';
 import { translateString } from '../../utils/helpers/';
 
@@ -93,7 +94,7 @@ function EditMediaButton(props) {
 export default function ViewerInfoContent(props) {
     const { userCan } = useUser();
 
-    const description = props.description.trim();
+    const description = props.description;
     const tagsContent =
         !PageStore.get('config-enabled').taxonomies.tags || PageStore.get('config-enabled').taxonomies.tags.enabled
             ? metafield(MediaPageStore.get('media-tags'))
@@ -174,25 +175,6 @@ export default function ViewerInfoContent(props) {
     const authorLink = formatInnerLink(props.author.url, SiteContext._currentValue.url);
     const authorThumb = formatInnerLink(props.author.thumb, SiteContext._currentValue.url);
 
-    function setTimestampAnchors(text) {
-        function wrapTimestampWithAnchor(match, string) {
-            let split = match.split(':'),
-                s = 0,
-                m = 1;
-
-            while (split.length > 0) {
-                s += m * parseInt(split.pop(), 10);
-                m *= 60;
-            }
-
-            const wrapped = `<a href="#" data-timestamp="${s}" class="video-timestamp">${match}</a>`;
-            return wrapped;
-        }
-
-        const timeRegex = new RegExp('((\\d)?\\d:)?(\\d)?\\d:\\d\\d', 'g');
-        return text.replace(timeRegex, wrapTimestampWithAnchor);
-    }
-
     return (
         <div className="media-info-content">
             {void 0 === PageStore.get('config-media-item').displayAuthor ||
@@ -210,10 +192,7 @@ export default function ViewerInfoContent(props) {
                 <div className="media-content-banner-inner">
                     {hasSummary ? <div className="media-content-summary">{summary}</div> : null}
                     {(!hasSummary || isContentVisible) && description ? (
-                        <div
-                            className="media-content-description"
-                            dangerouslySetInnerHTML={{ __html: setTimestampAnchors(description) }}
-                        ></div>
+                        <MediaDescription source={description} />
                     ) : null}
                     {hasSummary ? (
                         <button className="load-more" onClick={onClickLoadMore}>

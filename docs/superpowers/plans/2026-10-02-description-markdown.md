@@ -1,6 +1,6 @@
 # Media Description Markdown Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans or, if selected by the user, superpowers:subagent-driven-development to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans or, if selected by the user, superpowers:subagent-driven-development to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** 仅为媒体播放页的 `description` 增加安全 Markdown 展示，保留原文编辑及时间戳跳转。
 
@@ -39,7 +39,7 @@
 - MediaPage.scss 的父容器有 white-space: pre-wrap；描述容器改 normal，换行由 Markdown softbreak 输出 br，pre/code 保留代码空白。
 - templates/cms/media.html 在多种媒体类型的 JSON-LD 内直接插值 description；原文包含换行会使 JSON 无效，需要 JSON 字符串序列化。
 - 选 markdown-it 是为了沿用现有 React/Jest 工具链，并直接区分文本、代码和链接 token。使用官方公开 parse 接口，不自行实现 Markdown 语法。
-- npm 是 frontend/README.md 和 CI 实际使用的包管理器；更新 frontend/package.json、frontend/package-lock.json，不顺带重写历史 yarn.lock。
+- npm 是 frontend/README.md 和 CI 实际使用的包管理器；更新 frontend/package.json、frontend/yarn.lock，不顺带重写历史 yarn.lock。
 
 参考：[token 结构](https://markdown-it.github.io/markdown-it/documents/Architecture.html)、[解析和链接校验 API](https://markdown-it.github.io/markdown-it/interfaces/MarkdownIt.html)、[14.1.0 CJS/ESM 入口](https://github.com/markdown-it/markdown-it/blob/14.1.0/package.json)。实施安装时检查实际解析版本及安全公告，若存在适用漏洞则采用修复版并记录兼容性结果。
 
@@ -48,14 +48,14 @@
 **Files:**
 - Create: frontend/src/static/js/components/media-page/MediaDescription.jsx
 - Create: frontend/tests/media-page/MediaDescription.test.jsx
-- Modify: frontend/package.json、frontend/package-lock.json
+- Modify: frontend/package.json、frontend/yarn.lock
 
 **Interfaces:**
 - Produces: `MediaDescription({ source: string }): ReactElement | null`，根节点 className 为 media-content-description，空白输入返回 null；非空输入解析前不 trim。
 - 内部 `renderTokens(tokens, keyPrefix, insideLink): ReactNode[]` 处理块及行内 token；`renderTimestampText(text, keyPrefix): ReactNode[]` 生成文本和时间戳链接，不作为公共 API。
 - 锚点输出：`<a href="#" className="video-timestamp" data-timestamp="90">01:30</a>`。
 
-- [ ] **1. 写失败测试。** 按现有 ReactDOM.render/act 模式创建组件测试，覆盖以下断言：
+- [x] **1. 写失败测试。** 按现有 ReactDOM.render/act 模式创建组件测试，覆盖以下断言：
 
 | 用例 | 必须验证 |
 | --- | --- |
@@ -69,10 +69,10 @@
 | 中英文相邻时间戳、连续多个时间戳 | 无字符丢失；完整匹配 hh:mm:ss，不将其拆成两个锚点 |
 | Markdown 图片、未闭合语法、转义标点 | 无图片网络请求；内容可读，无异常 |
 
-- [ ] **2. 在 frontend 运行 `npm test -- --runInBand tests/media-page/MediaDescription.test.jsx`。** 预期因组件不存在失败，保留失败证据。
-- [ ] **3. 安装 `markdown-it@^14.1.0` 并实现组件。** 配置 html:false、breaks:true、linkify:false、typographer:false；禁用 image/table/strikethrough 等未要求扩展。只映射受支持的 token 标签，不透传 token 任意属性，不使用 dangerouslySetInnerHTML；文本由 React 转义。白名单属性仅 href/title、有序列表 start 及本组件生成的时间戳属性。链接先沿用 parser 默认校验，再限定 http/https/mailto 或无协议的相对链接；不放宽 parser 默认安全检查。以 link 深度贯穿嵌套渲染，跳过链接、code_inline、fence、code_block 内时间戳。延续原匹配允许一至两位时/分、两位秒，优先完整长时间戳，不改变播放器越界处理。
-- [ ] **4. 重跑上述测试。** 必须全部通过；新增一个包含所有必需格式的混合样例，断言渲染没有重复 key 警告。
-- [ ] **5. 仅提交本任务文件。** 建议提交信息：`feat: add safe media description markdown component`。
+- [x] **2. 在 frontend 运行 `npm test -- --runInBand tests/media-page/MediaDescription.test.jsx`。** 预期因组件不存在失败，保留失败证据。
+- [x] **3. 安装 `markdown-it@^14.1.0` 并实现组件。** 配置 html:false、breaks:true、linkify:false、typographer:false；禁用 image/table/strikethrough 等未要求扩展。只映射受支持的 token 标签，不透传 token 任意属性，不使用 dangerouslySetInnerHTML；文本由 React 转义。白名单属性仅 href/title、有序列表 start 及本组件生成的时间戳属性。链接先沿用 parser 默认校验，再限定 http/https/mailto 或无协议的相对链接；不放宽 parser 默认安全检查。以 link 深度贯穿嵌套渲染，跳过链接、code_inline、fence、code_block 内时间戳。延续原匹配允许一至两位时/分、两位秒，优先完整长时间戳，不改变播放器越界处理。
+- [x] **4. 重跑上述测试。** 必须全部通过；新增一个包含所有必需格式的混合样例，断言渲染没有重复 key 警告。
+- [x] **5. 仅提交本任务文件。** 建议提交信息：`feat: add safe media description markdown component`。
 
 ## Task 2: description 原文存储与输出边界
 
@@ -80,24 +80,24 @@
 - Modify: files/models/media.py、files/serializers.py、files/forms.py
 - Modify: files/templatetags/custom_filters.py、templates/cms/media.html
 - Create: tests/api/test_media_description.py
-- Create: tests/forms/test_media_description.py
-- Create: tests/pages/test_media_description.py
+- Create: tests/forms/test_media_description_forms.py
+- Create: tests/pages/test_media_description_pages.py
 
 **Interfaces:**
 - Consumes: 现有 Media.description、MediaSerializer、SingleMediaSerializer、MediaMetadataForm；字段名与 API 响应结构保持不变。
 - Produces: 保存再读取 description 返回原文；API 更新仍使用 `PUT /api/v1/media/{friendly_token}`，当前成功状态为 201。
 - Produces: 模板过滤器 `json_string(value: str) -> SafeString`：使用 json.dumps 序列化为包含双引号的合法 JSON 字符串，再将 `<`、`>`、`&` 转为 JSON Unicode 转义；只标记此序列化结果为安全。不能用 escapejs 代替 JSON 序列化。
 
-- [ ] **1. 写失败测试。** 使用已有媒体 fixture 或 bulk_create 初始化媒体，随后必须走真实 Media.save/serializer/form 保存路径；仅 mock 转码、通知等外部副作用，不 mock 被测保存逻辑。
+- [x] **1. 写失败测试。** 使用已有媒体 fixture 或 bulk_create 初始化媒体，随后必须走真实 Media.save/serializer/form 保存路径；仅 mock 转码、通知等外部副作用，不 mock 被测保存逻辑。
   - `test_description_model_round_trip`：围栏内 `<div>`、`&`、反斜杠、首尾空白保存再 refresh 后逐字符一致；title 的 HTML 仍被剥离。
   - `test_description_api_round_trip`：认证拥有者 PUT 后 GET，description 与原文完全一致，包括四空格缩进、两个尾随空格、结尾换行和空描述。
   - `test_description_form_round_trip`：MediaMetadataForm 验证/保存及编辑 textarea 内容保留相同源码；`</textarea><script>` 不能退出 textarea。
   - `test_description_jsonld_round_trip`：参数化媒体页已有 video/audio/image/其他 JSON-LD 分支，提供含换行、引号、反斜杠、`</script><script>` 的 description；提取每个 JSON-LD 并 json.loads，description 等于源码，无注入 script。同时断言 meta 属性正确 HTML 转义。
-- [ ] **2. 运行下面的后端定向命令。** 预期原文/空白保留及 JSON-LD 用例在现有代码失败。
-  `docker compose -f docker-compose-dev.yaml exec --env TESTING=True -T web pytest tests/api/test_media_description.py tests/forms/test_media_description.py tests/pages/test_media_description.py -q`
-- [ ] **3. 实现保存及编码调整。** 从 strip_text_items 移除 description，保留 title 处理；MediaSerializer 显式定义 description 为允许空串、非必填、trim_whitespace=False 的 CharField；MediaMetadataForm 的 description 字段 strip=False，保留 textarea 原有标签及样式。增加 json_string 过滤器，仅替换媒体 JSON-LD 中 description 的字符串插值位置，删除外层手写双引号；维持既有 summary 条件的兼容行为，不新增 summary。HTML meta 和 textarea 继续默认自动转义。
-- [ ] **4. 重跑后端定向测试。** 要求全通过；检查所有 description 消费位置，确认不存在新增原文直插 HTML 的路径，相关发现记入实施记录。
-- [ ] **5. 仅提交本任务文件。** 建议提交信息：`fix: preserve media description source and escape output`。
+- [x] **2. 运行下面的后端定向命令。** 预期原文/空白保留及 JSON-LD 用例在现有代码失败。
+  `docker compose -f docker-compose-dev.yaml exec --env TESTING=True -T web pytest tests/api/test_media_description.py tests/forms/test_media_description_forms.py tests/pages/test_media_description_pages.py -q`
+- [x] **3. 实现保存及编码调整。** 从 strip_text_items 移除 description，保留 title 处理；MediaSerializer 显式定义 description 为允许空串、非必填、trim_whitespace=False 的 CharField；MediaMetadataForm 的 description 字段 strip=False，保留 textarea 原有标签及样式。增加 json_string 过滤器，仅替换媒体 JSON-LD 中 description 的字符串插值位置，删除外层手写双引号；维持既有 summary 条件的兼容行为，不新增 summary。HTML meta 和 textarea 继续默认自动转义。
+- [x] **4. 重跑后端定向测试。** 要求全通过；检查所有 description 消费位置，确认不存在新增原文直插 HTML 的路径，相关发现记入实施记录。
+- [x] **5. 仅提交本任务文件。** 建议提交信息：`fix: preserve media description source and escape output`。
 
 ## Task 3: 播放页接入、排版和端到端验证
 
@@ -111,13 +111,13 @@
 - Consumes: Task 1 的 MediaDescription(source)；Task 2 返回的原始 description。
 - 保留 VideoJSEmbed 的 document 点击处理：实际调用播放器 currentTime(90)/currentTime(3750)，不添加第二套跳转事件。
 
-- [ ] **1. 写失败测试。** ViewerInfoContent 接收 Markdown 时产生格式化内容，空白描述隐藏；默认无 summary 时描述直接显示。保留一个模拟现有 summary 的兼容测试，SHOW MORE/LESS 只控制描述可见性。验证四空格代码不会因 ViewerInfoContent 的 trim 变成普通文本。
-- [ ] **2. 写真实事件集成测试。** 渲染实际 VideoJSEmbed，mock 播放器及无关加载依赖，将 Task 1 组件置于 document 中；播放器 duration 返回 7200。分别点击 01:30、01:02:30，断言真实现存事件处理调用 currentTime(90)、currentTime(3750)；普通 Markdown 链接和代码不触发 seek。不能在测试中重写一个假的时间戳处理器来代替实际组件。
-- [ ] **3. 运行 `npm test -- --runInBand tests/media-page`（frontend）。** 确认格式及原文缩进测试在接入前失败，记录现有播放器行为的基线。
-- [ ] **4. 接入组件与样式。** 删除 ViewerInfoContent 中局部 setTimestampAnchors 和 dangerouslySetInnerHTML；仅用 trim 判断空白，传原始 props.description。样式全部限定在 .media-content-description：normal 空白、段落/标题间距、列表缩进及标记、引用边线、可辨识代码背景；pre 使用 white-space:pre、max-width:100%、overflow-x:auto，长普通文本 overflow-wrap:anywhere。沿用主题变量，不修改摘要或评论样式。
-- [ ] **5. 执行定向及最终检查。** frontend 中依次运行 `npm test -- --runInBand tests/media-page`、`npm test -- --runInBand`、`npm run dist`；仓库根运行 Task 2 定向测试及 `git diff --check`。新失败与既有基线失败分开记录；不能将环境未启动或依赖缺失写成测试通过。
-- [ ] **6. 浏览器验收。** 在隔离的开发/测试数据中创建含完整 Markdown、两个时间戳、长代码、危险输入的描述；用时长超过 3750 秒的可播放媒体验证两个跳转目标。分别在 1440px 和 1024px 桌面视口、浅/深主题检查展示，确认页面无横向溢出且 pre 自身能横向滚动。编辑后刷新验证源码和格式仍在，记录截图及实际播放器秒数；测试数据不写入生产。
-- [ ] **7. 仅提交本任务文件。** 建议提交信息：`feat: render markdown descriptions on media pages`。
+- [x] **1. 写失败测试。** ViewerInfoContent 接收 Markdown 时产生格式化内容，空白描述隐藏；默认无 summary 时描述直接显示。保留一个模拟现有 summary 的兼容测试，SHOW MORE/LESS 只控制描述可见性。验证四空格代码不会因 ViewerInfoContent 的 trim 变成普通文本。
+- [x] **2. 写真实事件集成测试。** 渲染实际 VideoJSEmbed，mock 播放器及无关加载依赖，将 Task 1 组件置于 document 中；播放器 duration 返回 7200。分别点击 01:30、01:02:30，断言真实现存事件处理调用 currentTime(90)、currentTime(3750)；普通 Markdown 链接和代码不触发 seek。不能在测试中重写一个假的时间戳处理器来代替实际组件。
+- [x] **3. 运行 `npm test -- --runInBand tests/media-page`（frontend）。** 确认格式及原文缩进测试在接入前失败，记录现有播放器行为的基线。
+- [x] **4. 接入组件与样式。** 删除 ViewerInfoContent 中局部 setTimestampAnchors 和 dangerouslySetInnerHTML；仅用 trim 判断空白，传原始 props.description。样式全部限定在 .media-content-description：normal 空白、段落/标题间距、列表缩进及标记、引用边线、可辨识代码背景；pre 使用 white-space:pre、max-width:100%、overflow-x:auto，长普通文本 overflow-wrap:anywhere。沿用主题变量，不修改摘要或评论样式。
+- [x] **5. 执行定向及最终检查。** frontend 中依次运行 `npm test -- --runInBand tests/media-page`、`npm test -- --runInBand`、`npm run dist`；仓库根运行 Task 2 定向测试及 `git diff --check`。新失败与既有基线失败分开记录；不能将环境未启动或依赖缺失写成测试通过。
+- [x] **6. 浏览器验收。** 在隔离的开发/测试数据中创建含完整 Markdown、两个时间戳、长代码、危险输入的描述；用时长超过 3750 秒的可播放媒体验证两个跳转目标。分别在 1440px 和 1024px 桌面视口、浅/深主题检查展示，确认页面无横向溢出且 pre 自身能横向滚动。编辑后刷新验证源码和格式仍在，记录截图及实际播放器秒数；测试数据不写入生产。
+- [x] **7. 仅提交本任务文件。** 建议提交信息：`feat: render markdown descriptions on media pages`。
 
 ## 执行准备与交付
 
@@ -126,4 +126,20 @@
 - 先记录基线，再执行 Task 1 → Task 2 → Task 3；每任务完成一次相关验证，不反复运行不相关重型转码测试。
 - 前端安全渲染与后端原文保存必须作为同一版本发布，不能单独上线后端原文保存改动。
 - 最终交付包含改动摘要、定向和整体测试结果、构建结果、浏览器验收证据及未解决限制；提交不等于自动推送、部署或发送 GitHub 评论。
-- 本文是技术计划，目前未安装依赖、修改产品代码或执行验收测试。用户已选择 inline execution：当前会话顺序实施及自审，不使用任何 sub-agent。
+- 本计划已执行；测试结果和环境限制见下方执行记录。用户已选择 inline execution：当前会话顺序实施及自审，不使用任何 sub-agent。
+
+
+## 执行记录（2026-10-02）
+
+- 全程 inline execution，无 sub-agent；最终为作者自审。
+- 独立工作区 `/tmp/mediacms-description-markdown`，分支 `feat/description-markdown`。
+- 最终依赖 markdown-it 14.3.2；仅更新已跟踪的 yarn.lock 新增依赖闭包，package-lock.json 按仓库规则忽略。
+- 前端：39 个测试套件、273 项测试通过；生产构建成功，仍有现存 Sass 弃用及 bundle 大小警告。
+- 后端定向：19 项测试及 15 个 subtests 通过，含既有 15 项播放进度测试。
+- 后端全量：61 项通过，1 项失败：`tests/api/test_new_media.py::TestX::test_file_upload`，HLS 条目为 0，断言期望 13。在相同临时环境使用原始 c366c2f 后端代码单独重跑，同样失败；本次未修改上传/转码逻辑。
+- 后端使用现有 venv 与临时 PostgreSQL（55434），未使用生产数据库；本次不覆盖容器镜像打包。
+- API 测试遵循现有 multipart 输入；表单和页面测试使用不同文件名，避免非 package 测试目录的模块重名。
+- 浏览器：1440px/1024px 桌面、浅/深主题；无页面横向溢出，长代码块独立横向滚动；真实 3900 秒视频点击时间戳后分别为 90/3750 秒；危险内容不执行，浏览器无 JS 错误。
+- 实际编辑页保存并重新打开，缩进、代码、尾随空格和末尾换行均保留；播放页格式保持正确。
+- 最终自审检查：链接协议及控制字符、嵌套链接/代码时间戳、API/表单源码、JSON-LD 转义、主题与溢出；未发现新增阻断问题。
+- 未修改 summary 或评论。暂不合并、推送或部署，保留分支供审阅。
