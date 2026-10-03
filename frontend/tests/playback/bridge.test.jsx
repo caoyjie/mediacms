@@ -4,6 +4,18 @@ import { act } from 'react-dom/test-utils';
 import VideoJSEmbed from '../../src/static/js/components/VideoJS/VideoJSEmbed';
 
 const data = { media_type: 'audio', url: 'http://localhost/view?m=bridge-audio', content_revision: 'revision' };
+test('player updates do not reuse the legacy URL when the site version stays unchanged', () => {
+  document.querySelectorAll('script[src*="video-js.js"], link[href*="video-js.css"]').forEach(el => el.remove());
+  const container = document.createElement('div');
+  document.body.appendChild(container);
+  act(() => { ReactDOM.render(<VideoJSEmbed data={data} version="8.3.4" />, container); });
+  const scriptUrl = new URL(document.querySelector('script[src*="video-js.js"]').src);
+  act(() => { ReactDOM.unmountComponentAtNode(container); });
+  container.remove();
+  expect(scriptUrl.pathname).toBe('/static/video_js/video-js.js');
+  expect(scriptUrl.search).not.toBe('?v=8.3.4');
+});
+
 test('metadata re-renders keep saving through the already mounted player', async () => {
   window.history.replaceState({}, '', '/view?m=bridge-audio');
   window.MediaCMS = { site: { id: 'bridge' }, user: { is: { anonymous: true } } };

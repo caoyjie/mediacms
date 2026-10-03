@@ -1643,32 +1643,9 @@ function VideoJSPlayer({ videoId = 'default-video', showTitle = true, showRelate
 
                     // END: Move progress bar below control bar
 
-                    // Auto-play video when navigating from next button (skip for embed players)
-                    if (!isEmbedPlayer) {
-                        const urlParams = new URLSearchParams(window.location.search);
-                        const hasVideoParam = urlParams.get('m');
-                        if (hasVideoParam) {
-                            // Small delay to ensure everything is loaded
-                            setTimeout(async () => {
-                                if (playerRef.current && !playerRef.current.isDisposed()) {
-                                    try {
-                                        await playerRef.current.play();
-                                    } catch (error) {
-                                        console.error('ℹ️ Browser prevented play:', error.message);
-                                        // Try muted playback as fallback
-                                        if (!playerRef.current.muted()) {
-                                            try {
-                                                playerRef.current.muted(true);
-                                                await playerRef.current.play();
-                                            } catch (mutedError) {
-                                                console.error('ℹ️ Even muted play was blocked:', mutedError.message);
-                                            }
-                                        }
-                                    }
-                                }
-                            }, 100);
-                        }
-                    }
+                    // Autoplay is handled above, after progress restoration on watch pages.
+                    // A second timer here can trigger play before restoration and cause
+                    // the controller to treat it as a user override.
 
                     // BEGIN: Add subtitle tracks
                     if (hasSubtitles) {

@@ -1,6 +1,10 @@
 import React, { useEffect, useRef } from 'react';
 import { createProgressAdapter } from '../../utils/playback/ProgressAdapter';
 
+// The player bundle changes independently of the configured MediaCMS version.
+// Bump this revision when deploying changes to the separately built player.
+const PLAYER_ASSET_REVISION = 'playback-progress-2';
+
 /**
  * VideoJSEmbed - A React component that embeds the MediaCMS video js
  *
@@ -241,14 +245,14 @@ const VideoJSEmbed = ({
         if (!existingCSS) {
             const cssLink = document.createElement('link');
             cssLink.rel = 'stylesheet';
-            cssLink.href = siteUrl + '/static/video_js/video-js.css?v=' + version;
+            cssLink.href = siteUrl + '/static/video_js/video-js.css?v=' + version + '&player=' + PLAYER_ASSET_REVISION;
             document.head.appendChild(cssLink);
         }
 
         // Load JS if not already loaded
         if (!existingJS) {
             const script = document.createElement('script');
-            script.src = siteUrl + '/static/video_js/video-js.js?v=' + version;
+            script.src = siteUrl + '/static/video_js/video-js.js?v=' + version + '&player=' + PLAYER_ASSET_REVISION;
             document.head.appendChild(script);
         }
     };
