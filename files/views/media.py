@@ -47,6 +47,7 @@ from ..models import (
     PlaylistMedia,
     Tag,
 )
+from ..playlist_operations import PlaylistCapacityExceeded, PlaylistUnavailable, add_media_to_playlists
 from ..serializers import MediaSearchSerializer, MediaSerializer, SingleMediaSerializer
 from ..stop_words import STOP_WORDS
 from ..tasks import save_user_action
@@ -369,6 +370,7 @@ class MediaBulkUserActions(APIView):
                         "course_cleanup",
                     ],
                 ),
+                'dry_run': openapi.Schema(type=openapi.TYPE_BOOLEAN, default=False, description='For add_to_playlist: validate without writing; capacity failure returns 400 with code=playlist_capacity_exceeded, limit and playlists.'),
                 'playlist_ids': openapi.Schema(
                     type=openapi.TYPE_ARRAY,
                     items=openapi.Items(type=openapi.TYPE_INTEGER),
@@ -462,20 +464,19 @@ class MediaBulkUserActions(APIView):
             if not playlists:
                 return Response({"detail": "No matching playlists found"}, status=status.HTTP_400_BAD_REQUEST)
 
-            added_count = 0
-            for playlist in playlists:
-                for m in media:
-                    media_in_playlist = PlaylistMedia.objects.filter(playlist=playlist).count()
-                    if media_in_playlist < settings.MAX_MEDIA_PER_PLAYLIST:
-                        obj, created = PlaylistMedia.objects.get_or_create(
-                            playlist=playlist,
-                            media=m,
-                            ordering=media_in_playlist + 1,
-                        )
-                        if created:
-                            added_count += 1
-
-            return Response({"detail": f"Added {added_count} media items to {playlists.count()} playlists"})
+            dry_run = request.data.get('dry_run', False)
+            if not isinstance(dry_run, bool):
+                return Response({"detail": "dry_run must be a boolean"}, status=status.HTTP_400_BAD_REQUEST)
+            try:
+                result = add_media_to_playlists(playlist_ids=list(playlists.values_list('pk', flat=True)),
+                                                media_ids=list(media.values_list('pk', flat=True)), dry_run=dry_run)
+            except PlaylistCapacityExceeded as exc:
+                return Response(exc.payload, status=status.HTTP_400_BAD_REQUEST)
+            except PlaylistUnavailable as exc:
+                return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+            if dry_run:
+                return Response(result)
+            return Response({"detail": f"Added {result['added_count']} media items to {len(result['playlists'])} playlists", **result})
 
         elif action == "remove_from_playlist":
             playlist_ids = request.data.get('playlist_ids', [])

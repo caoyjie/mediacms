@@ -18,6 +18,7 @@ from cms.permissions import IsAuthorizedToAdd, IsUserOrEditor
 
 from ..methods import is_mediacms_editor
 from ..models import Media, Playlist, PlaylistMedia
+from ..playlist_operations import PlaylistCapacityExceeded, PlaylistUnavailable, add_media_to_playlists
 from ..serializers import MediaSerializer, PlaylistDetailSerializer, PlaylistSerializer
 
 
@@ -137,7 +138,13 @@ class PlaylistDetail(APIView):
         manual_parameters=[],
         tags=['Playlists'],
         operation_summary='to_be_written',
-        operation_description='to_be_written',
+        operation_description='Add, remove or reorder media. For add, dry_run=true validates capacity without writing. Capacity failures return HTTP 400 with code=playlist_capacity_exceeded, limit and playlists.',
+        request_body=openapi.Schema(type=openapi.TYPE_OBJECT, properties={
+            'type': openapi.Schema(type=openapi.TYPE_STRING, enum=['add', 'remove', 'ordering']),
+            'media_friendly_token': openapi.Schema(type=openapi.TYPE_STRING),
+            'ordering': openapi.Schema(type=openapi.TYPE_INTEGER),
+            'dry_run': openapi.Schema(type=openapi.TYPE_BOOLEAN, default=False),
+        }),
     )
     def put(self, request, friendly_token, format=None):
         playlist = self.get_playlist(friendly_token)
@@ -158,23 +165,18 @@ class PlaylistDetail(APIView):
                 if action == "add":
                     if media.state == "private" and not (request.user.has_member_access_to_media(media) or is_mediacms_editor(request.user)):
                         return Response({"detail": "media is not valid"}, status=status.HTTP_400_BAD_REQUEST)
-                    media_in_playlist = PlaylistMedia.objects.filter(playlist=playlist).count()
-                    if media_in_playlist >= settings.MAX_MEDIA_PER_PLAYLIST:
-                        return Response(
-                            {"detail": "max number of media for a Playlist reached"},
-                            status=status.HTTP_400_BAD_REQUEST,
-                        )
-                    else:
-                        obj, created = PlaylistMedia.objects.get_or_create(
-                            playlist=playlist,
-                            media=media,
-                            ordering=media_in_playlist + 1,
-                        )
-                        obj.save()
-                        return Response(
-                            {"detail": "media added to Playlist"},
-                            status=status.HTTP_201_CREATED,
-                        )
+                    dry_run = request.data.get("dry_run", False)
+                    if not isinstance(dry_run, bool):
+                        return Response({"detail": "dry_run must be a boolean"}, status=status.HTTP_400_BAD_REQUEST)
+                    try:
+                        result = add_media_to_playlists(playlist_ids=[playlist.pk], media_ids=[media.pk], dry_run=dry_run)
+                    except PlaylistCapacityExceeded as exc:
+                        return Response(exc.payload, status=status.HTTP_400_BAD_REQUEST)
+                    except PlaylistUnavailable as exc:
+                        return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+                    if dry_run:
+                        return Response(result)
+                    return Response({"detail": "media added to Playlist", **result}, status=status.HTTP_201_CREATED)
                 elif action == "remove":
                     PlaylistMedia.objects.filter(playlist=playlist, media=media).delete()
                     return Response(

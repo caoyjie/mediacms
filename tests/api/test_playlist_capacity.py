@@ -86,3 +86,89 @@ class PlaylistCapacityTests(TestCase):
         self.playlist.delete()
         with self.assertRaises(PlaylistUnavailable):
             add_media_to_playlists(playlist_ids=[pk], media_ids=[self.media[0].pk])
+
+
+from rest_framework.test import APIClient
+from unittest.mock import patch
+
+
+@override_settings(MAX_MEDIA_PER_PLAYLIST=2)
+class PlaylistCapacityAPITests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username='api-owner')
+        self.other = User.objects.create_user(username='other-owner')
+        self.media = make_media(self.user, 4)
+        self.playlist = Playlist.objects.create(user=self.user, title='API Course')
+        self.client = APIClient()
+        self.client.force_authenticate(self.user)
+
+    def request(self, bulk=False, **extra):
+        if bulk:
+            return self.client.post('/api/v1/media/user/bulk_actions', dict(
+                action='add_to_playlist', playlist_ids=[self.playlist.pk], media_ids=[self.media[0].friendly_token], **extra), format='json')
+        return self.client.put(f'/api/v1/playlists/{self.playlist.friendly_token}', dict(
+            type='add', media_friendly_token=self.media[0].friendly_token, **extra), format='json')
+
+    def test_both_endpoints_preflight_and_idempotent_commit(self):
+        for bulk in [False, True]:
+            PlaylistMedia.objects.all().delete()
+            response = self.request(bulk, dry_run=True)
+            self.assertEqual(response.status_code, 200, response.data)
+            self.assertTrue(response.data['allowed'])
+            self.assertEqual(PlaylistMedia.objects.count(), 0)
+            for expected_added in [1, 0]:
+                response = self.request(bulk)
+                self.assertEqual(response.status_code, 200 if bulk else 201)
+                self.assertEqual(response.data['added_count'], expected_added)
+            self.assertEqual(PlaylistMedia.objects.count(), 1)
+
+    def test_both_endpoints_structured_overflow_and_stale_preflight(self):
+        for bulk in [False, True]:
+            PlaylistMedia.objects.all().delete()
+            self.assertEqual(self.request(bulk, dry_run=True).status_code, 200)
+            PlaylistMedia.objects.bulk_create([PlaylistMedia(playlist=self.playlist, media=m) for m in self.media[1:3]])
+            for dry_run in [True, False]:
+                response = self.request(bulk, dry_run=dry_run)
+                self.assertEqual(response.status_code, 400)
+                self.assertEqual(response.data['code'], 'playlist_capacity_exceeded')
+                self.assertEqual(response.data['limit'], 2)
+                self.assertEqual(response.data['playlists'][0]['current_count'], 2)
+                self.assertEqual(response.data['playlists'][0]['requested_new_count'], 1)
+                self.assertEqual(response.data['playlists'][0]['remaining_capacity'], 0)
+            self.assertEqual(PlaylistMedia.objects.count(), 2)
+
+    def test_invalid_dry_run_never_writes(self):
+        for bulk in [False, True]:
+            for value in ['false', 1, None, []]:
+                self.assertEqual(self.request(bulk, dry_run=value).status_code, 400)
+        self.assertEqual(PlaylistMedia.objects.count(), 0)
+
+    def test_bulk_rejects_whole_batch(self):
+        empty = Playlist.objects.create(user=self.user, title='Empty')
+        PlaylistMedia.objects.bulk_create([PlaylistMedia(playlist=self.playlist, media=m) for m in self.media[1:3]])
+        response = self.client.post('/api/v1/media/user/bulk_actions', dict(action='add_to_playlist',
+            playlist_ids=[empty.pk, self.playlist.pk], media_ids=[self.media[0].friendly_token]), format='json')
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(empty.playlistmedia_set.count(), 0)
+
+    def test_permissions_apply_to_preflight_and_commit(self):
+        for dry_run in [True, False]:
+            for bulk in [False, True]:
+                for user in [None, self.other]:
+                    self.client.force_authenticate(user)
+                    response = self.request(bulk, dry_run=dry_run)
+                    self.assertGreaterEqual(response.status_code, 400)
+                    self.assertNotIn('playlists', response.data)
+        self.assertEqual(PlaylistMedia.objects.count(), 0)
+
+    def test_private_media_denied(self):
+        Media.objects.filter(pk=self.media[0].pk).update(user=self.other, state='private')
+        for dry_run in [True, False]:
+            for bulk in [False, True]:
+                self.assertGreaterEqual(self.request(bulk, dry_run=dry_run).status_code, 400)
+        self.assertEqual(PlaylistMedia.objects.count(), 0)
+
+    def test_deleted_after_authorization_is_controlled_failure(self):
+        for bulk, target in [(False, 'files.views.playlists'), (True, 'files.views.media')]:
+            with patch(target + '.add_media_to_playlists', side_effect=PlaylistUnavailable('Playlist no longer available')):
+                self.assertEqual(self.request(bulk).status_code, 400)
