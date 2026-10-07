@@ -281,6 +281,14 @@ translation_strings = {
     "You are going to disable download for": "",
     "You are going to enable comments to": "",
     "You are going to enable download for": "",
+    'Playlist capacity exceeded': 'Playlist capacity exceeded',
+    'Nothing was added. Select fewer items or remove existing items, then try again.': 'Nothing was added. Select fewer items or remove existing items, then try again.',
+    'Limit: {count}': 'Limit: {count}',
+    'Current: {count}': 'Current: {count}',
+    'New: {count}': 'New: {count}',
+    'Remaining: {count}': 'Remaining: {count}',
+    'Back to selection': 'Back to selection',
+    'Media already in playlist': 'Media already in playlist',
 }
 
 replacement_strings = {
@@ -311,12 +319,4 @@ replacement_strings = {
     "weeks ago": "",
     "year ago": "",
     "years ago": "",
-    'Playlist capacity exceeded': 'Playlist capacity exceeded',
-    'Nothing was added. Select fewer items or remove existing items, then try again.': 'Nothing was added. Select fewer items or remove existing items, then try again.',
-    'Limit: {count}': 'Limit: {count}',
-    'Current: {count}': 'Current: {count}',
-    'New: {count}': 'New: {count}',
-    'Remaining: {count}': 'Remaining: {count}',
-    'Back to selection': 'Back to selection',
-    'Media already in playlist': 'Media already in playlist',
 }

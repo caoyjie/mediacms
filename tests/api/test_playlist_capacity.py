@@ -195,3 +195,9 @@ class PlaylistCapacityAPITests(TestCase):
         self.assertTrue(deleted)
         self.assertEqual(response.status_code, 400, response.data)
         self.assertEqual(empty.playlistmedia_set.count(), 0)
+
+    def test_capacity_messages_are_in_frontend_translation_dictionary(self):
+        from files.frontend_translations import get_translation
+        for language, expected in [('zh-hans', '播放列表容量不足'), ('zh-hant', '播放清單容量不足')]:
+            self.assertEqual(get_translation(language).get('Playlist capacity exceeded'), expected)
+            self.assertIn('{count}', get_translation(language)['Limit: {count}'])
