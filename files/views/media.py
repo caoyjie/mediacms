@@ -460,7 +460,7 @@ class MediaBulkUserActions(APIView):
             if not playlist_ids:
                 return Response({"detail": "playlist_ids is required for add_to_playlist action"}, status=status.HTTP_400_BAD_REQUEST)
 
-            playlists = Playlist.objects.filter(user=request.user, id__in=playlist_ids)
+            playlists = list(Playlist.objects.filter(user=request.user, id__in=playlist_ids))
             if not playlists:
                 return Response({"detail": "No matching playlists found"}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -468,8 +468,8 @@ class MediaBulkUserActions(APIView):
             if not isinstance(dry_run, bool):
                 return Response({"detail": "dry_run must be a boolean"}, status=status.HTTP_400_BAD_REQUEST)
             try:
-                result = add_media_to_playlists(playlist_ids=list(playlists.values_list('pk', flat=True)),
-                                                media_ids=list(media.values_list('pk', flat=True)), dry_run=dry_run)
+                result = add_media_to_playlists(playlist_ids=[playlist.pk for playlist in playlists],
+                                                media_ids=[item.pk for item in media], dry_run=dry_run)
             except PlaylistCapacityExceeded as exc:
                 return Response(exc.payload, status=status.HTTP_400_BAD_REQUEST)
             except PlaylistUnavailable as exc:

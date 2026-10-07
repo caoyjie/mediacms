@@ -172,3 +172,26 @@ class PlaylistCapacityAPITests(TestCase):
         for bulk, target in [(False, 'files.views.playlists'), (True, 'files.views.media')]:
             with patch(target + '.add_media_to_playlists', side_effect=PlaylistUnavailable('Playlist no longer available')):
                 self.assertEqual(self.request(bulk).status_code, 400)
+
+    def test_bulk_target_deleted_after_queryset_authorization_aborts_every_add(self):
+        from django.db.models.query import QuerySet
+        empty = Playlist.objects.create(user=self.user, title='Must stay empty')
+        victim_id = self.playlist.pk
+        original_fetch = QuerySet._fetch_all
+        deleted = False
+
+        def delete_after_authorized_fetch(queryset):
+            nonlocal deleted
+            original_fetch(queryset)
+            if not deleted and queryset.model is Playlist and queryset._result_cache and any(
+                isinstance(p, Playlist) and p.pk == victim_id for p in queryset._result_cache
+            ):
+                deleted = True
+                Playlist.objects.filter(pk=victim_id).delete()
+
+        with patch.object(QuerySet, '_fetch_all', delete_after_authorized_fetch):
+            response = self.client.post('/api/v1/media/user/bulk_actions', dict(action='add_to_playlist',
+                playlist_ids=[victim_id, empty.pk], media_ids=[self.media[0].friendly_token]), format='json')
+        self.assertTrue(deleted)
+        self.assertEqual(response.status_code, 400, response.data)
+        self.assertEqual(empty.playlistmedia_set.count(), 0)
