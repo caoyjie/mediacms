@@ -1,5 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import './BulkActionPlaylistModal.scss';
+import { PlaylistCapacityDialog, PlaylistCapacityError } from './PlaylistCapacityDialog';
+import { addWithCapacityCheck, parsePlaylistCapacityError } from '../utils/helpers/playlistCapacity';
 import { translateString } from '../utils/helpers/';
 
 interface Playlist {
@@ -27,6 +29,8 @@ export const BulkActionPlaylistModal: React.FC<BulkActionPlaylistModalProps> = (
   csrfToken,
   username,
 }) => {
+  const processingRef = useRef(false);
+  const [capacityError, setCapacityError] = useState<PlaylistCapacityError | null>(null);
   const [availablePlaylists, setAvailablePlaylists] = useState<Playlist[]>([]);
   const [selectedPlaylists, setSelectedPlaylists] = useState<Playlist[]>([]);
   const [originalSelectedPlaylists, setOriginalSelectedPlaylists] = useState<Playlist[]>([]);
@@ -40,6 +44,7 @@ export const BulkActionPlaylistModal: React.FC<BulkActionPlaylistModalProps> = (
     if (isOpen && selectedMediaIds.length > 0) {
       fetchData();
     } else {
+      setCapacityError(null);
       // Reset state when modal closes
       setAvailablePlaylists([]);
       setSelectedPlaylists([]);
@@ -142,6 +147,8 @@ export const BulkActionPlaylistModal: React.FC<BulkActionPlaylistModalProps> = (
   };
 
   const handleProceed = async () => {
+    if (processingRef.current || capacityError) return;
+    processingRef.current = true;
     setIsProcessing(true);
 
     try {
@@ -156,22 +163,16 @@ export const BulkActionPlaylistModal: React.FC<BulkActionPlaylistModalProps> = (
       if (toAdd.length > 0) {
         const playlistIds = toAdd.map((p) => p.id).filter((id): id is number => id !== undefined);
         if (playlistIds.length > 0) {
-          const addResponse = await fetch('/api/v1/media/user/bulk_actions', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'X-CSRFToken': csrfToken,
-            },
-            body: JSON.stringify({
-              action: 'add_to_playlist',
-              media_ids: selectedMediaIds,
-              playlist_ids: playlistIds,
-            }),
+          await addWithCapacityCheck(async (dry_run: boolean) => {
+            const response = await fetch('/api/v1/media/user/bulk_actions', {
+              method: 'POST',
+              headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken},
+              body: JSON.stringify({action: 'add_to_playlist', media_ids: selectedMediaIds, playlist_ids: playlistIds, dry_run}),
+            });
+            const data = await response.json();
+            if (!response.ok) throw Object.assign(new Error('Playlist addition failed'), {response: {data}});
+            return data;
           });
-
-          if (!addResponse.ok) {
-            throw new Error(translateString('Failed to add media to playlists'));
-          }
         }
       }
 
@@ -201,9 +202,15 @@ export const BulkActionPlaylistModal: React.FC<BulkActionPlaylistModalProps> = (
       onSuccess(translateString('Successfully updated playlist membership'));
       onCancel();
     } catch (error) {
+      const capacity = parsePlaylistCapacityError((error as {response?: {data?: unknown}})?.response?.data);
+      if (capacity) {
+        setCapacityError(capacity);
+        return;
+      }
       console.error('Error processing playlists:', error);
       onError(translateString('Failed to update playlists. Please try again.'));
     } finally {
+      processingRef.current = false;
       setIsProcessing(false);
     }
   };
@@ -221,7 +228,8 @@ export const BulkActionPlaylistModal: React.FC<BulkActionPlaylistModalProps> = (
   if (!isOpen) return null;
 
   return (
-    <div className="playlist-modal-overlay">
+    <>
+    <div className="playlist-modal-overlay" aria-hidden={capacityError ? true : undefined}>
       <div className="playlist-modal">
         <div className="playlist-modal-header">
           <h2>{translateString('Manage Playlists')}</h2>
@@ -338,5 +346,7 @@ export const BulkActionPlaylistModal: React.FC<BulkActionPlaylistModalProps> = (
         </div>
       </div>
     </div>
+    <PlaylistCapacityDialog error={capacityError} onClose={() => setCapacityError(null)} />
+    </>
   );
 };

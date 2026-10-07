@@ -311,4 +311,12 @@ replacement_strings = {
     "weeks ago": "週前",
     "year ago": "年前",
     "years ago": "年前",
+    'Playlist capacity exceeded': '播放清單容量不足',
+    'Nothing was added. Select fewer items or remove existing items, then try again.': '本次新增未執行。請減少選取或移除已有項目後重試。',
+    'Limit: {count}': '上限：{count}',
+    'Current: {count}': '已有：{count}',
+    'New: {count}': '本次新增：{count}',
+    'Remaining: {count}': '剩餘容量：{count}',
+    'Back to selection': '返回調整',
+    'Media already in playlist': '媒體已在播放清單中',
 }

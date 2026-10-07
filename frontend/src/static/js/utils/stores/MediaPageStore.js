@@ -1,4 +1,5 @@
 import EventEmitter from 'events';
+import { addWithCapacityCheck } from '../helpers/playlistCapacity';
 import { exportStore, getRequest, postRequest, putRequest, deleteRequest, csrfToken } from '../helpers';
 import { config as mediacmsConfig } from '../settings/config.js';
 
@@ -48,6 +49,7 @@ class MediaPageStore extends EventEmitter {
     this.mediacms_config = mediacmsConfig(window.MediaCMS);
 
     this._MEDIA = null;
+    this.pendingPlaylistAdditions = new Set();
 
     this.pagePlaylistId = null;
     this.pagePlaylistData = null;
@@ -627,22 +629,30 @@ class MediaPageStore extends EventEmitter {
     this.emit('playlist_creation_failed');
   }
 
-  onPlaylistMediaAdditionCompleted(playlist_id, response) {
-    if (response) {
-      let i = 0;
-      while (i < MediaPageStoreData[this.id].playlists.length) {
-        if (playlist_id === MediaPageStoreData[this.id].playlists[i].playlist_id) {
-          MediaPageStoreData[this.id].playlists[i].media_list.push(MediaPageStoreData[this.id].mediaId);
-          break;
-        }
-        i += 1;
-      }
-      this.emit('media_playlist_addition_completed', playlist_id);
-    }
+  isPlaylistAdditionPending(playlistId) {
+    return this.pendingPlaylistAdditions.has(playlistId);
   }
 
-  onPlaylistMediaAdditionFailed(playlist_id, response) {
-    this.emit('media_playlist_addition_failed');
+  async addMediaToPlaylist(playlistId, mediaId) {
+    if (this.isPlaylistAdditionPending(playlistId)) return;
+    this.pendingPlaylistAdditions.add(playlistId);
+    this.emit('media_playlist_addition_pending');
+    try {
+      const result = await addWithCapacityCheck(dry_run => new Promise((resolve, reject) => {
+        putRequest(this.mediacms_config.api.playlists + '/' + playlistId,
+          {type: 'add', media_friendly_token: mediaId, dry_run},
+          {headers: {'X-CSRFToken': csrfToken()}}, false,
+          response => resolve(response.data), reject);
+      }));
+      const playlist = (MediaPageStoreData[this.id].playlists || []).find(p => p.playlist_id === playlistId);
+      if (playlist && !playlist.media_list.includes(mediaId)) playlist.media_list.push(mediaId);
+      this.emit('media_playlist_addition_completed', playlistId, result.added_count);
+    } catch (error) {
+      this.emit('media_playlist_addition_failed', error?.response?.data);
+    } finally {
+      this.pendingPlaylistAdditions.delete(playlistId);
+      this.emit('media_playlist_addition_pending');
+    }
   }
 
   onPlaylistMediaRemovalCompleted(playlist_id, response) {
@@ -781,21 +791,7 @@ class MediaPageStore extends EventEmitter {
         );
         break;
       case 'ADD_MEDIA_TO_PLAYLIST':
-        putRequest(
-          this.mediacms_config.api.playlists + '/' + action.playlist_id,
-          {
-            type: 'add',
-            media_friendly_token: action.media_id,
-          },
-          {
-            headers: {
-              'X-CSRFToken': csrfToken(),
-            },
-          },
-          false,
-          this.onPlaylistMediaAdditionCompleted.bind(this, action.playlist_id),
-          this.onPlaylistMediaAdditionFailed.bind(this, action.playlist_id)
-        );
+        this.addMediaToPlaylist(action.playlist_id, action.media_id);
         break;
       case 'REMOVE_MEDIA_FROM_PLAYLIST':
         putRequest(

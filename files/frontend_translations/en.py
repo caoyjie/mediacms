@@ -311,4 +311,12 @@ replacement_strings = {
     "weeks ago": "",
     "year ago": "",
     "years ago": "",
+    'Playlist capacity exceeded': 'Playlist capacity exceeded',
+    'Nothing was added. Select fewer items or remove existing items, then try again.': 'Nothing was added. Select fewer items or remove existing items, then try again.',
+    'Limit: {count}': 'Limit: {count}',
+    'Current: {count}': 'Current: {count}',
+    'New: {count}': 'New: {count}',
+    'Remaining: {count}': 'Remaining: {count}',
+    'Back to selection': 'Back to selection',
+    'Media already in playlist': 'Media already in playlist',
 }

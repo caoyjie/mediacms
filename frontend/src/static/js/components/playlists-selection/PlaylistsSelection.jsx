@@ -6,6 +6,8 @@ import { CircleIconButton, MaterialIcon } from '../_shared';
 import { PlaylistCreationForm } from '../playlist-form/PlaylistCreationForm';
 
 import './PlaylistsSelection.scss';
+import { PlaylistCapacityDialog } from '../PlaylistCapacityDialog';
+import { parsePlaylistCapacityError } from '../../utils/helpers/playlistCapacity';
 
 function PlaylistsSingleSelection(props) {
   function onChange(ev) {
@@ -20,7 +22,7 @@ function PlaylistsSingleSelection(props) {
 
   return !!props.renderDate ? (
     <label>
-      <input type="checkbox" checked={props.isChecked} onChange={onChange} />
+      <input type="checkbox" checked={props.isChecked} disabled={props.disabled} onChange={onChange} />
       <span>{props.title}</span>
       {/*<MaterialIcon type={ "private" === this.props.privacy ? "lock" : ( "unlisted" === this.props.privacy ? "link" : "public" ) } />*/}
     </label>
@@ -42,6 +44,7 @@ export function PlaylistsSelection(props) {
   const containerRef = useRef(null);
   const saveToSelectRef = useRef(null);
 
+  const [capacityError, setCapacityError] = useState(null);
   const [date, setDate] = useState(new Date());
   const [playlists, setPlaylists] = useState(MediaPageStore.get('playlists'));
   const [openCreatePlaylist, setOpenCreatePlaylist] = useState(false);
@@ -55,15 +58,24 @@ export function PlaylistsSelection(props) {
     setDate(new Date());
   }
 
-  function onPlaylistMediaAdditionComplete() {
+  function onPlaylistMediaAdditionComplete(playlistId, addedCount) {
     setPlaylists(MediaPageStore.get('playlists'));
     setDate(new Date());
     setTimeout(function () {
-      PageActions.addNotification('Media added to playlist', 'playlistMediaAdditionComplete');
+      PageActions.addNotification(addedCount === 0 ? 'Media already in playlist' : 'Media added to playlist', 'playlistMediaAdditionComplete');
     }, 100);
   }
 
-  function onPlaylistMediaAdditionFail() {
+  function onPlaylistMediaAdditionPending() {
+    setDate(new Date());
+  }
+
+  function onPlaylistMediaAdditionFail(data) {
+    const capacity = parsePlaylistCapacityError(data);
+    if (capacity) {
+      setCapacityError(capacity);
+      return;
+    }
     setTimeout(function () {
       PageActions.addNotification("Media's addition to playlist failed", 'playlistMediaAdditionFail');
     }, 100);
@@ -102,6 +114,7 @@ export function PlaylistsSelection(props) {
         <div key={'playlist_' + playlists[i].playlist_id}>
           <PlaylistsSingleSelection
             renderDate={date}
+            disabled={!!capacityError || MediaPageStore.isPlaylistAdditionPending(playlists[i].playlist_id)}
             title={playlists[i].title}
             privacy={playlists[i].status}
             isChecked={-1 < playlists[i].media_list.indexOf(mediaId)}
@@ -138,6 +151,7 @@ export function PlaylistsSelection(props) {
   useEffect(() => {
     PageStore.on('window_resize', onWindowResize);
     MediaPageStore.on('playlists_load', onLoadPlaylists);
+    MediaPageStore.on('media_playlist_addition_pending', onPlaylistMediaAdditionPending);
     MediaPageStore.on('media_playlist_addition_completed', onPlaylistMediaAdditionComplete);
     MediaPageStore.on('media_playlist_addition_failed', onPlaylistMediaAdditionFail);
     MediaPageStore.on('media_playlist_removal_completed', onPlaylistMediaRemovalComplete);
@@ -146,6 +160,7 @@ export function PlaylistsSelection(props) {
     return () => {
       PageStore.removeListener('window_resize', onWindowResize);
       MediaPageStore.removeListener('playlists_load', onLoadPlaylists);
+      MediaPageStore.removeListener('media_playlist_addition_pending', onPlaylistMediaAdditionPending);
       MediaPageStore.removeListener('media_playlist_addition_completed', onPlaylistMediaAdditionComplete);
       MediaPageStore.removeListener('media_playlist_addition_failed', onPlaylistMediaAdditionFail);
       MediaPageStore.removeListener('media_playlist_removal_completed', onPlaylistMediaRemovalComplete);
@@ -154,6 +169,7 @@ export function PlaylistsSelection(props) {
   }, []);
 
   return (
+    <>
     <div ref={containerRef} className="saveto-popup">
       <div className="saveto-title">
         Save to...
@@ -177,6 +193,8 @@ export function PlaylistsSelection(props) {
         </CircleIconButton>
       )}
     </div>
+    <PlaylistCapacityDialog error={capacityError} onClose={() => setCapacityError(null)} />
+    </>
   );
 }
 
