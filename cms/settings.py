@@ -86,7 +86,7 @@ SHOW_ORIGINAL_MEDIA = True
 # some authentication taking place. Check nginx file and setup a
 # basic http auth user/password if you want to restrict access
 
-MAX_MEDIA_PER_PLAYLIST = 70
+MAX_MEDIA_PER_PLAYLIST = 100
 # bytes, size of uploaded media
 UPLOAD_MAX_SIZE = 800 * 1024 * 1000 * 5
 
